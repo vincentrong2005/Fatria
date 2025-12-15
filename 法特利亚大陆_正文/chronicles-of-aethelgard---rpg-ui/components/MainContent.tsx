@@ -7,6 +7,8 @@ interface MainContentProps {
   onSendMessage: (message: string) => void;
   isProcessing: boolean;
   mainText?: string;
+  // 允许外部（例如技能面板）注册一个函数，用于向输入框预填文本
+  registerPrefillHandler?: (fn: (text: string) => void) => void;
 }
 
 interface TextSettings {
@@ -16,7 +18,7 @@ interface TextSettings {
   fontFamily: string; // Tailwnd class
 }
 
-export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing, mainText, onSendMessage }) => {
+export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing, mainText, onSendMessage, registerPrefillHandler }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -89,6 +91,14 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
   useEffect(() => {
     scrollToBottom();
   }, [chatLog]);
+
+  // 让外部可以把一段文字“塞进”输入框（例如点击技能时）
+  useEffect(() => {
+    if (!registerPrefillHandler) return;
+    registerPrefillHandler((text: string) => {
+      setInputValue(text);
+    });
+  }, [registerPrefillHandler]);
 
   const handleSubmit = () => {
     const content = inputValue.trim();

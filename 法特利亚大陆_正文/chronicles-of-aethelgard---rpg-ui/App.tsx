@@ -1,5 +1,5 @@
 import { Maximize2, Minimize2 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { LeftSidebar } from './components/LeftSidebar';
 import { MainContent } from './components/MainContent';
 import { Modal } from './components/Modal';
@@ -20,6 +20,8 @@ const App: React.FC = () => {
   const [mainText, setMainText] = useState<string>('');
   const [news, setNews] = useState<NewsItem[]>(MOCK_NEWS);
   const [mvuStat, setMvuStat] = useState<any | null>(null);
+  // 用于让其他组件（例如技能面板）向输入框预填文本
+  const prefillInputRef = useRef<((text: string) => void) | null>(null);
 
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
@@ -139,6 +141,9 @@ const App: React.FC = () => {
           onSendMessage={handleSendMessage}
           isProcessing={isProcessing}
           mainText={mainText}
+          registerPrefillHandler={(fn) => {
+            prefillInputRef.current = fn;
+          }}
         />
 
         {/* Right Sidebar: Inventory & Menu */}
@@ -158,6 +163,9 @@ const App: React.FC = () => {
         character={character}
         mvuStat={mvuStat}
         isFullscreen={isFullscreen}
+        onSkillToChat={(text) => {
+          prefillInputRef.current?.(text);
+        }}
       />
     </div>
   );

@@ -9,9 +9,11 @@ interface ModalProps {
   character: Character;
   mvuStat: any | null;
   isFullscreen: boolean;
+  // 当技能被点击，希望把一段文字填入聊天输入框
+  onSkillToChat?: (text: string) => void;
 }
 
-export const Modal: React.FC<ModalProps> = ({ isOpen, type, onClose, character, mvuStat, isFullscreen }) => {
+export const Modal: React.FC<ModalProps> = ({ isOpen, type, onClose, character, mvuStat, isFullscreen, onSkillToChat }) => {
   if (!isOpen || !type) return null;
 
   const isMap = type === 'MAP';
@@ -34,7 +36,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, type, onClose, character, 
       case 'INVENTORY':
         return <InventoryView items={character.inventory} />;
       case 'SKILLS':
-        return <SkillsView mvuStat={mvuStat} />;
+        return <SkillsView mvuStat={mvuStat} onSkillToChat={onSkillToChat} />;
       case 'QUESTS':
         return <QuestsView mvuStat={mvuStat} />;
       case 'SOCIAL':
@@ -204,7 +206,7 @@ const InventoryView: React.FC<{ items: InventoryItem[] }> = ({ items }) => {
   );
 };
 
-const SkillsView: React.FC<{ mvuStat: any | null }> = ({ mvuStat }) => {
+const SkillsView: React.FC<{ mvuStat: any | null; onSkillToChat?: (text: string) => void }> = ({ mvuStat, onSkillToChat }) => {
   const [activeTab, setActiveTab] = useState<'physical' | 'magical'>('physical');
 
   const grouped = (() => {
@@ -279,7 +281,16 @@ const SkillsView: React.FC<{ mvuStat: any | null }> = ({ mvuStat }) => {
       {/* Skills List */}
       <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3">
          {grouped[activeTab].map((skill, i) => (
-           <div key={i} className="bg-stone-900/40 border border-stone-800 p-4 rounded hover:border-stone-700 transition-colors group">
+           <div
+             key={i}
+             className="bg-stone-900/40 border border-stone-800 p-4 rounded hover:border-stone-700 transition-colors group cursor-pointer"
+             onClick={() => {
+               if (!onSkillToChat) return;
+               const header = `${skill.level || ''}${skill.type || ''} ${skill.name}`.replace(/\s+/g, ' ').trim();
+               const line = `【使用】${header} ${skill.desc} 消耗：${skill.cost}`;
+               onSkillToChat(line);
+             }}
+           >
               <div className="flex justify-between items-center mb-1">
                  <div className="flex items-center gap-3">
                     <div className="w-8 h-8 flex items-center justify-center bg-stone-950 border border-stone-800 rounded font-display font-bold">
