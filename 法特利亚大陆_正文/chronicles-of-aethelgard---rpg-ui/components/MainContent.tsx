@@ -16,7 +16,7 @@ interface TextSettings {
   fontFamily: string; // Tailwnd class
 }
 
-export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing, mainText }) => {
+export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing, mainText, onSendMessage }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<TextSettings>({
@@ -26,6 +26,8 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
     fontFamily: 'font-serif'
   });
 
+  const [inputValue, setInputValue] = useState('');
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -33,6 +35,18 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
   useEffect(() => {
     scrollToBottom();
   }, [chatLog]);
+
+  const handleSubmit = () => {
+    const content = inputValue.trim();
+    if (!content) return;
+    try {
+      onSendMessage(content);
+      setInputValue('');
+    } catch (e) {
+      console.error('发送消息失败', e);
+      // 这里交给上层决定是否 toast
+    }
+  };
 
   return (
     <main className="basis-[56%] min-w-0 flex flex-col h-full bg-gradient-to-br from-[#0f1018cc] via-[#0b0d13cc] to-[#050507cc] rounded-2xl border border-[#2f3040] shadow-[0_20px_60px_rgba(0,0,0,0.65)] relative overflow-hidden mx-3 backdrop-blur-xl column-scroll">
@@ -116,7 +130,7 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
       {/* Main Area */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar z-10 scroll-smooth">
         {mainText && (
-          <div className="w-full flex justify-center">
+        <div className="w-full flex flex-col items-center gap-4">
             <div
               className={`
                 bg-[#0b0d13e6] border border-[var(--gold-700)]/50 rounded-xl p-6
@@ -137,6 +151,24 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
               </div>
               <div className="whitespace-pre-wrap leading-7 text-[var(--gold-100)] drop-shadow">
                 {mainText}
+              </div>
+            </div>
+            {/* 正文下方输入框 */}
+            <div className="w-full flex justify-center">
+              <div className="w-[85%] max-w-[960px] flex items-center gap-2">
+                <input
+                  type="text"
+                  className="flex-1 bg-[#080910] border border-[var(--gold-700)]/40 rounded-lg px-4 py-2 text-sm text-[var(--gold-100)] placeholder:text-stone-500 focus:outline-none focus:border-[var(--gold-500)] focus:ring-1 focus:ring-[var(--gold-500)] shadow-[0_0_12px_rgba(0,0,0,0.8)]"
+                  placeholder="在此输入你对当前局面的行动、发言或指令，按 Enter 发送到酒馆……"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSubmit();
+                    }
+                  }}
+                />
               </div>
             </div>
           </div>

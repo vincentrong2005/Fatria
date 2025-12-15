@@ -85,41 +85,31 @@ const App: React.FC = () => {
   };
 
   const handleSendMessage = async (message: string) => {
-    // 1. Add User Message
-    const userMsg: Message = { role: 'user', content: message };
-    setChatLog(prev => [...prev, userMsg]);
-    setIsProcessing(true);
+    const content = message.trim();
+    if (!content) return;
 
-    // 2. Simulate LLM processing (Mocking Gemini for UI Demo purposes)
-    // In production: const response = await generateResponse(message, history);
-
-    setTimeout(() => {
-      const mockResponses = [
-        "你感觉到一股奇异的魔力在剑锋流转。当你挥剑斩向粘液时，它发出刺耳的尖叫声，随后化为一滩黑水，露出了通往深处的阶梯。",
-        "你的直觉告诉你，这并非普通的遭遇。空气中弥漫着硫磺的味道，这是恶魔生物出现的征兆。",
-        "你从背包中取出魔法卷轴，随着咒语的吟唱，微弱的光芒照亮了前方的黑暗，揭示了墙壁上古老的壁画。",
-        "你的尝试失败了。那股力量反噬了你的意志，你的精神属性受到了一次冲击。"
-      ];
-
-      const randomResponse = mockResponses[Math.floor(Math.random() * mockResponses.length)];
-
-      setChatLog(prev => [...prev, { role: 'model', content: randomResponse }]);
-      setIsProcessing(false);
-
-      // 3. Simulate State Update based on action (e.g., gain XP or lose MP)
-      setCharacter(prev => ({
-        ...prev,
-        vitals: {
-          ...prev.vitals,
-          mp: Math.max(0, prev.vitals.mp - 5)
+    try {
+      // 发送到酒馆当前聊天作为用户发言
+      // @ts-expect-error createChatMessages 为全局注入
+      await createChatMessages([
+        {
+          role: 'user',
+          message: content,
         },
-        experience: {
-            ...prev.experience,
-            magical: prev.experience.magical + 15
-        }
-      }));
+      ]);
 
-    }, 2000); // Simulate network latency/thinking time
+      // 触发一次常规生成
+      // @ts-expect-error triggerSlash 为全局注入
+      await triggerSlash('/trigger');
+
+      // 可选：给一点提示
+      // @ts-expect-error toastr 为全局注入
+      toastr.success('已将指令发送至当前聊天。', '酒馆已接收');
+    } catch (err) {
+      console.error('发送到酒馆失败', err);
+      // @ts-expect-error toastr 为全局注入
+      toastr.error('发送到酒馆失败，请稍后重试。', '错误');
+    }
   };
 
   return (
