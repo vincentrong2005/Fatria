@@ -9,6 +9,8 @@ interface MainContentProps {
   mainText?: string;
   // 允许外部（例如技能面板）注册一个函数，用于向输入框预填文本
   registerPrefillHandler?: (fn: (text: string) => void) => void;
+  // 当左右栏全部隐藏时，让正文区域铺满可用宽度
+  expandFull?: boolean;
 }
 
 interface TextSettings {
@@ -18,7 +20,14 @@ interface TextSettings {
   fontFamily: string; // Tailwnd class
 }
 
-export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing, mainText, onSendMessage, registerPrefillHandler }) => {
+export const MainContent: React.FC<MainContentProps> = ({
+  chatLog,
+  isProcessing,
+  mainText,
+  onSendMessage,
+  registerPrefillHandler,
+  expandFull = false,
+}) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -52,6 +61,7 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
 
   const [settings, setSettings] = useState<TextSettings>(loadSettings);
   const [inputValue, setInputValue] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // 保存设置到聊天变量
   const saveSettings = (newSettings: TextSettings) => {
@@ -100,6 +110,17 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
     });
   }, [registerPrefillHandler]);
 
+  // 自动调整 textarea 高度
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    // 重置高度以获取正确的 scrollHeight
+    textarea.style.height = 'auto';
+    // 设置新高度，但不超过 max-h-[200px] (200px)
+    const newHeight = Math.min(textarea.scrollHeight, 200);
+    textarea.style.height = `${newHeight}px`;
+  }, [inputValue]);
+
   const handleSubmit = () => {
     const content = inputValue.trim();
     if (!content) return;
@@ -113,7 +134,16 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
   };
 
   return (
-    <main className="basis-[56%] min-w-0 flex flex-col h-full bg-gradient-to-br from-[#0f1018cc] via-[#0b0d13cc] to-[#050507cc] rounded-2xl border border-[#2f3040] shadow-[0_20px_60px_rgba(0,0,0,0.65)] relative overflow-hidden mx-3 backdrop-blur-xl column-scroll">
+    <main
+      className={`
+        min-w-0 flex flex-col h-full
+        bg-gradient-to-br from-[#0f1018cc] via-[#0b0d13cc] to-[#050507cc]
+        rounded-2xl border border-[#2f3040]
+        shadow-[0_20px_60px_rgba(0,0,0,0.65)]
+        relative overflow-hidden mx-3 backdrop-blur-xl column-scroll
+        ${expandFull ? 'basis-full' : 'basis-[56%]'}
+      `}
+    >
       {/* Background Texture */}
       <div className="absolute inset-0 opacity-5 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] pointer-events-none"></div>
 
@@ -203,7 +233,7 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
               `}
               style={{
                 width: `${settings.width}%`,
-                maxWidth: '960px',
+                maxWidth: expandFull ? '100%' : '960px',
                 fontSize: `${settings.fontSize}px`,
                 letterSpacing: `${settings.letterSpacing}px`,
               }}
@@ -219,11 +249,17 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
             </div>
             {/* 正文下方输入框 */}
             <div className="w-full flex justify-center">
-              <div className="w-[85%] max-w-[960px] flex items-center gap-2">
-                <input
-                  type="text"
-                  className="flex-1 bg-[#080910] border border-[var(--gold-700)]/40 rounded-lg px-4 py-2 text-sm text-[var(--gold-100)] placeholder:text-stone-500 focus:outline-none focus:border-[var(--gold-500)] focus:ring-1 focus:ring-[var(--gold-500)] shadow-[0_0_12px_rgba(0,0,0,0.8)]"
-                  placeholder="在此输入你对当前局面的行动、发言或指令，按 Enter 发送到酒馆……"
+              <div
+                className="flex items-start gap-2"
+                style={{
+                  width: `${settings.width}%`,
+                  maxWidth: expandFull ? '100%' : '960px',
+                }}
+              >
+                <textarea
+                  ref={textareaRef}
+                  className="flex-1 bg-[#080910] border border-[var(--gold-700)]/40 rounded-lg px-4 py-2 text-sm text-[var(--gold-100)] placeholder:text-stone-500 focus:outline-none focus:border-[var(--gold-500)] focus:ring-1 focus:ring-[var(--gold-500)] shadow-[0_0_12px_rgba(0,0,0,0.8)] resize-none min-h-[44px] max-h-[200px] overflow-y-auto custom-scrollbar leading-relaxed"
+                  placeholder="在此输入你对当前局面的行动、发言或指令，按 Enter 发送，Shift+Enter 换行……"
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={(e) => {
@@ -231,6 +267,15 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
                       e.preventDefault();
                       handleSubmit();
                     }
+                  }}
+                  rows={1}
+                  style={{
+                    fontSize: `${settings.fontSize}px`,
+                    letterSpacing: `${settings.letterSpacing}px`,
+                    fontFamily: settings.fontFamily === 'font-serif' ? 'serif' :
+                                settings.fontFamily === 'font-sans' ? 'sans-serif' :
+                                settings.fontFamily === 'font-mono' ? 'monospace' :
+                                settings.fontFamily === 'font-display' ? 'Cinzel, "Cormorant Garamond", "Noto Serif SC", serif' : 'inherit',
                   }}
                 />
               </div>

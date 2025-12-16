@@ -23,6 +23,47 @@ const App: React.FC = () => {
   // 用于让其他组件（例如技能面板）向输入框预填文本
   const prefillInputRef = useRef<((text: string) => void) | null>(null);
 
+  // --- 布局：左右栏开关（支持记忆） ---
+  const loadSidebarSettings = () => {
+    try {
+      // @ts-expect-error getVariables 为全局注入
+      const vars = getVariables({ type: 'chat' });
+      const saved = vars?.['ui_settings']?.['sidebar'];
+      return {
+        left: typeof saved?.left === 'boolean' ? saved.left : false,
+        right: typeof saved?.right === 'boolean' ? saved.right : false,
+      };
+    } catch (err) {
+      console.warn('读取侧栏设置失败，使用默认值（仅正文）', err);
+      return { left: false, right: false };
+    }
+  };
+
+  const [{ left: showLeftSidebar, right: showRightSidebar }, setSidebarState] = useState(() => loadSidebarSettings());
+
+  const saveSidebarSettings = (next: { left: boolean; right: boolean }) => {
+    try {
+      // @ts-expect-error getVariables, insertOrAssignVariables 为全局注入
+      const vars = getVariables({ type: 'chat' });
+      const updated = {
+        ...vars,
+        ui_settings: {
+          ...(vars?.ui_settings || {}),
+          sidebar: next,
+        },
+      };
+      // @ts-expect-error insertOrAssignVariables 为全局注入
+      insertOrAssignVariables(updated, { type: 'chat' });
+    } catch (err) {
+      console.warn('保存侧栏设置失败', err);
+    }
+  };
+
+  const updateSidebarState = (next: { left: boolean; right: boolean }) => {
+    setSidebarState(next);
+    saveSidebarSettings(next);
+  };
+
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', handler);
@@ -116,6 +157,26 @@ const App: React.FC = () => {
 
   return (
     <div className="relative min-h-full w-full bg-gradient-to-br from-[#050507] via-[#0b0d13] to-[#050507] flex items-center justify-center p-4 overflow-visible font-sans select-none text-[var(--gold-100)]">
+      {/* 顶部控制按钮区域：左右栏开关 + 全屏 */}
+      <div className="absolute top-4 left-4 z-30 flex flex-wrap gap-2">
+        <button
+          onClick={() =>
+            updateSidebarState({ left: !showLeftSidebar, right: showRightSidebar })
+          }
+          className="px-3 py-1 rounded-md border border-[#3a2a0f] bg-[#0f1018cc] text-[var(--gold-100)] shadow-[0_10px_30px_rgba(0,0,0,0.6)] hover:border-[var(--gold-500)] hover:shadow-[0_10px_30px_rgba(214,167,79,0.35)] backdrop-blur-md transition-all duration-200 text-[10px] tracking-widest"
+        >
+          {showLeftSidebar ? '隐藏左栏' : '显示左栏'}
+        </button>
+        <button
+          onClick={() =>
+            updateSidebarState({ left: showLeftSidebar, right: !showRightSidebar })
+          }
+          className="px-3 py-1 rounded-md border border-[#3a2a0f] bg-[#0f1018cc] text-[var(--gold-100)] shadow-[0_10px_30px_rgba(0,0,0,0.6)] hover:border-[var(--gold-500)] hover:shadow-[0_10px_30px_rgba(214,167,79,0.35)] backdrop-blur-md transition-all duration-200 text-[10px] tracking-widest"
+        >
+          {showRightSidebar ? '隐藏右栏' : '显示右栏'}
+        </button>
+      </div>
+
       <button
         onClick={toggleFullscreen}
         className="absolute top-4 right-4 z-30 px-3 py-2 rounded-md border border-[#3a2a0f] bg-[#0f1018cc] text-[var(--gold-100)] shadow-[0_10px_40px_rgba(0,0,0,0.6)] hover:border-[var(--gold-500)] hover:shadow-[0_10px_40px_rgba(214,167,79,0.35)] backdrop-blur-md transition-all duration-200 flex items-center gap-2 text-xs tracking-widest"
@@ -133,7 +194,9 @@ const App: React.FC = () => {
       <div className="relative z-10 w-full max-w-[1600px] min-h-[760px] flex gap-3">
 
         {/* Left Sidebar: Character & Status */}
-        <LeftSidebar character={character} global={globalState} mvuStat={mvuStat} />
+        {showLeftSidebar && (
+          <LeftSidebar character={character} global={globalState} mvuStat={mvuStat} />
+        )}
 
         {/* Center: Main Game Loop / Chat */}
         <MainContent
@@ -144,14 +207,17 @@ const App: React.FC = () => {
           registerPrefillHandler={(fn) => {
             prefillInputRef.current = fn;
           }}
+          expandFull={!showLeftSidebar && !showRightSidebar}
         />
 
         {/* Right Sidebar: Inventory & Menu */}
-        <RightSidebar
-          character={character}
-          news={news}
-          onOpenModal={setActiveModal}
-        />
+        {showRightSidebar && (
+          <RightSidebar
+            character={character}
+            news={news}
+            onOpenModal={setActiveModal}
+          />
+        )}
 
       </div>
 
