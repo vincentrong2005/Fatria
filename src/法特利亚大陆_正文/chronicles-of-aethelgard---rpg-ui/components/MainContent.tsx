@@ -18,7 +18,13 @@ interface TextSettings {
   fontFamily: string; // Tailwnd class
 }
 
-export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing, mainText, onSendMessage, registerPrefillHandler }) => {
+export const MainContent: React.FC<MainContentProps> = ({
+  chatLog,
+  isProcessing,
+  mainText,
+  onSendMessage,
+  registerPrefillHandler,
+}) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -27,7 +33,7 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
     width: 85,
     fontSize: 14,
     letterSpacing: 0,
-    fontFamily: 'font-serif'
+    fontFamily: 'font-serif',
   };
 
   // 从聊天变量读取保存的设置
@@ -86,7 +92,7 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -131,82 +137,97 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
 
       {/* Header / Title */}
       <div className="p-4 border-b border-[#2f3040] bg-[#0c0e16bf] backdrop-blur-xl flex justify-between items-center z-10 shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.55)]">
-         <div className="flex items-center gap-2">
-            <Sparkles size={16} className="text-[var(--gold-500)] animate-pulse-slow" />
-            <h1 className="font-display text-[var(--gold-100)] text-lg tracking-[0.2em] drop-shadow-xl">命运轨迹</h1>
-         </div>
-         <button
-           onClick={() => setShowSettings(!showSettings)}
-           className={`p-2 rounded-lg border border-transparent hover:border-[var(--gold-500)] hover:bg-white/5 transition-all ${showSettings ? 'text-[var(--gold-300)]' : 'text-stone-400'}`}
-         >
-            <Settings2 size={18} />
-         </button>
+        <div className="flex items-center gap-2">
+          <Sparkles size={16} className="text-[var(--gold-500)] animate-pulse-slow" />
+          <h1 className="font-display text-[var(--gold-100)] text-lg tracking-[0.2em] drop-shadow-xl">命运轨迹</h1>
+        </div>
+        <button
+          onClick={() => setShowSettings(!showSettings)}
+          className={`p-2 rounded-lg border border-transparent hover:border-[var(--gold-500)] hover:bg-white/5 transition-all ${showSettings ? 'text-[var(--gold-300)]' : 'text-stone-400'}`}
+        >
+          <Settings2 size={18} />
+        </button>
       </div>
 
       {/* Settings Panel */}
       {showSettings && (
-         <div className="absolute top-16 right-4 z-20 w-64 bg-[#0f1018f2] border border-[var(--gold-700)]/40 rounded-xl p-4 shadow-[0_15px_40px_rgba(0,0,0,0.6)] backdrop-blur-xl animate-slideUp">
-            <div className="flex justify-between items-center mb-3 border-b border-[#2f3040] pb-2">
-               <span className="text-xs font-display text-[var(--gold-100)] uppercase tracking-widest">阅读设置</span>
-               <button onClick={() => setShowSettings(false)} className="text-stone-500 hover:text-stone-200"><X size={14}/></button>
+        <div className="absolute top-16 right-4 z-20 w-64 bg-[#0f1018f2] border border-[var(--gold-700)]/40 rounded-xl p-4 shadow-[0_15px_40px_rgba(0,0,0,0.6)] backdrop-blur-xl animate-slideUp">
+          <div className="flex justify-between items-center mb-3 border-b border-[#2f3040] pb-2">
+            <span className="text-xs font-display text-[var(--gold-100)] uppercase tracking-widest">阅读设置</span>
+            <button onClick={() => setShowSettings(false)} className="text-stone-500 hover:text-stone-200">
+              <X size={14} />
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {/* Width Control */}
+            <div>
+              <label className="text-[10px] text-stone-400 uppercase block mb-1">文本宽度 ({settings.width}%)</label>
+              <input
+                type="range"
+                min="50"
+                max="100"
+                step="5"
+                value={settings.width}
+                onChange={e => updateSettings({ ...settings, width: parseInt(e.target.value) })}
+                className="w-full h-1 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
+              />
             </div>
 
-            <div className="space-y-4">
-               {/* Width Control */}
-               <div>
-                  <label className="text-[10px] text-stone-400 uppercase block mb-1">文本宽度 ({settings.width}%)</label>
-                  <input
-                    type="range" min="50" max="100" step="5"
-                    value={settings.width}
-                    onChange={(e) => updateSettings({...settings, width: parseInt(e.target.value)})}
-                    className="w-full h-1 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
-                  />
-               </div>
-
-               {/* Font Size Control */}
-               <div>
-                  <label className="text-[10px] text-stone-400 uppercase block mb-1">字体大小 ({settings.fontSize}px)</label>
-                  <input
-                    type="range" min="12" max="24" step="1"
-                    value={settings.fontSize}
-                    onChange={(e) => updateSettings({...settings, fontSize: parseInt(e.target.value)})}
-                    className="w-full h-1 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
-                  />
-               </div>
-
-               {/* Letter Spacing Control */}
-               <div>
-                  <label className="text-[10px] text-stone-400 uppercase block mb-1">字间距 ({settings.letterSpacing}px)</label>
-                  <input
-                    type="range" min="0" max="5" step="0.5"
-                    value={settings.letterSpacing}
-                    onChange={(e) => updateSettings({...settings, letterSpacing: parseFloat(e.target.value)})}
-                    className="w-full h-1 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
-                  />
-               </div>
-
-                {/* Font Family Control */}
-               <div>
-                  <label className="text-[10px] text-stone-400 uppercase block mb-1">字体风格</label>
-                  <select
-                    value={settings.fontFamily}
-                    onChange={(e) => updateSettings({...settings, fontFamily: e.target.value})}
-                    className="w-full bg-[#0b0d13] border border-[#2f3040] text-[var(--gold-100)] text-xs rounded p-1 focus:border-[var(--gold-500)] outline-none"
-                  >
-                     <option value="font-serif">衬线 (Serif)</option>
-                     <option value="font-sans">无衬线 (Sans)</option>
-                     <option value="font-mono">等宽 (Mono)</option>
-                     <option value="font-display">展示 (Display)</option>
-                  </select>
-               </div>
+            {/* Font Size Control */}
+            <div>
+              <label className="text-[10px] text-stone-400 uppercase block mb-1">
+                字体大小 ({settings.fontSize}px)
+              </label>
+              <input
+                type="range"
+                min="12"
+                max="24"
+                step="1"
+                value={settings.fontSize}
+                onChange={e => updateSettings({ ...settings, fontSize: parseInt(e.target.value) })}
+                className="w-full h-1 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
+              />
             </div>
-         </div>
+
+            {/* Letter Spacing Control */}
+            <div>
+              <label className="text-[10px] text-stone-400 uppercase block mb-1">
+                字间距 ({settings.letterSpacing}px)
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="5"
+                step="0.5"
+                value={settings.letterSpacing}
+                onChange={e => updateSettings({ ...settings, letterSpacing: parseFloat(e.target.value) })}
+                className="w-full h-1 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
+              />
+            </div>
+
+            {/* Font Family Control */}
+            <div>
+              <label className="text-[10px] text-stone-400 uppercase block mb-1">字体风格</label>
+              <select
+                value={settings.fontFamily}
+                onChange={e => updateSettings({ ...settings, fontFamily: e.target.value })}
+                className="w-full bg-[#0b0d13] border border-[#2f3040] text-[var(--gold-100)] text-xs rounded p-1 focus:border-[var(--gold-500)] outline-none"
+              >
+                <option value="font-serif">衬线 (Serif)</option>
+                <option value="font-sans">无衬线 (Sans)</option>
+                <option value="font-mono">等宽 (Mono)</option>
+                <option value="font-display">展示 (Display)</option>
+              </select>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Main Area */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar z-10 scroll-smooth">
         {mainText && (
-        <div className="w-full flex flex-col items-center gap-4">
+          <div className="w-full flex flex-col items-center gap-4">
             <div
               className={`
                 bg-[#0b0d13e6] border border-[var(--gold-700)]/50 rounded-xl p-6
@@ -225,9 +246,7 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
                 正文
                 <span className="flex-1 h-[1px] bg-[var(--gold-500)]/30" />
               </div>
-              <div className="whitespace-pre-wrap leading-7 text-[var(--gold-100)] drop-shadow">
-                {mainText}
-              </div>
+              <div className="whitespace-pre-wrap leading-7 text-[var(--gold-100)] drop-shadow">{mainText}</div>
             </div>
             {/* 正文下方输入框 */}
             <div className="w-full flex justify-center">
@@ -243,8 +262,8 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
                   className="flex-1 bg-[#080910] border border-[var(--gold-700)]/40 rounded-lg px-4 py-2 text-sm text-[var(--gold-100)] placeholder:text-stone-500 focus:outline-none focus:border-[var(--gold-500)] focus:ring-1 focus:ring-[var(--gold-500)] shadow-[0_0_12px_rgba(0,0,0,0.8)] resize-none min-h-[44px] max-h-[200px] overflow-y-auto custom-scrollbar leading-relaxed"
                   placeholder="在此输入你对当前局面的行动、发言或指令，按 Enter 发送，Shift+Enter 换行……"
                   value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => {
+                  onChange={e => setInputValue(e.target.value)}
+                  onKeyDown={e => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
                       handleSubmit();
@@ -254,70 +273,86 @@ export const MainContent: React.FC<MainContentProps> = ({ chatLog, isProcessing,
                   style={{
                     fontSize: `${settings.fontSize}px`,
                     letterSpacing: `${settings.letterSpacing}px`,
-                    fontFamily: settings.fontFamily === 'font-serif' ? 'serif' :
-                                settings.fontFamily === 'font-sans' ? 'sans-serif' :
-                                settings.fontFamily === 'font-mono' ? 'monospace' :
-                                settings.fontFamily === 'font-display' ? 'Cinzel, "Cormorant Garamond", "Noto Serif SC", serif' : 'inherit',
+                    fontFamily:
+                      settings.fontFamily === 'font-serif'
+                        ? 'serif'
+                        : settings.fontFamily === 'font-sans'
+                          ? 'sans-serif'
+                          : settings.fontFamily === 'font-mono'
+                            ? 'monospace'
+                            : settings.fontFamily === 'font-display'
+                              ? 'Cinzel, "Cormorant Garamond", "Noto Serif SC", serif'
+                              : 'inherit',
                   }}
                 />
               </div>
             </div>
           </div>
         )}
-        {!mainText && chatLog.map((msg, index) => (
-          <div
-            key={index}
-            className={`flex flex-col items-center animate-fadeIn`}
-            style={{ animationDelay: `${index * 50}ms` }}
-          >
-            {msg.role === 'system' && (
-              <div className="w-full text-center my-4">
-                 <span className="text-xs text-gold-700/60 font-mono border-b border-gold-900/30 pb-1 px-4">{msg.content}</span>
-              </div>
-            )}
+        {!mainText &&
+          chatLog.map((msg, index) => (
+            <div
+              key={index}
+              className={`flex flex-col items-center animate-fadeIn`}
+              style={{ animationDelay: `${index * 50}ms` }}
+            >
+              {msg.role === 'system' && (
+                <div className="w-full text-center my-4">
+                  <span className="text-xs text-gold-700/60 font-mono border-b border-gold-900/30 pb-1 px-4">
+                    {msg.content}
+                  </span>
+                </div>
+              )}
 
-            {msg.role !== 'system' && (
-              <div
-                className="flex flex-col w-full"
-                style={{ width: `${settings.width}%` }}
-              >
-                 <span className={`text-[10px] text-stone-600 mb-1 px-1 uppercase tracking-wider font-bold ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
+              {msg.role !== 'system' && (
+                <div className="flex flex-col w-full" style={{ width: `${settings.width}%` }}>
+                  <span
+                    className={`text-[10px] text-stone-600 mb-1 px-1 uppercase tracking-wider font-bold ${msg.role === 'user' ? 'text-right' : 'text-left'}`}
+                  >
                     {msg.role === 'user' ? '你' : '地下城主 (DM)'}
-                 </span>
-                 <div
-                   className={`
+                  </span>
+                  <div
+                    className={`
                      p-6 rounded-lg leading-relaxed shadow-lg text-left relative
-                     ${msg.role === 'user'
-                       ? 'bg-stone-900/90 text-stone-200 border border-stone-700'
-                       : 'bg-gradient-to-br from-stone-950 to-black text-stone-300 border border-gold-900/40'}
+                     ${
+                       msg.role === 'user'
+                         ? 'bg-stone-900/90 text-stone-200 border border-stone-700'
+                         : 'bg-gradient-to-br from-stone-950 to-black text-stone-300 border border-gold-900/40'
+                     }
                      ${settings.fontFamily}
                    `}
-                   style={{
-                     fontSize: `${settings.fontSize}px`,
-                     letterSpacing: `${settings.letterSpacing}px`
-                   }}
-                 >
+                    style={{
+                      fontSize: `${settings.fontSize}px`,
+                      letterSpacing: `${settings.letterSpacing}px`,
+                    }}
+                  >
                     {msg.role === 'model' && (
-                       // Corner accents for model messages
-                       <>
-                         <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-gold-600/40"></div>
-                         <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-gold-600/40"></div>
-                       </>
+                      // Corner accents for model messages
+                      <>
+                        <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-gold-600/40"></div>
+                        <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-gold-600/40"></div>
+                      </>
                     )}
                     <div className="whitespace-pre-wrap">{msg.content}</div>
-                 </div>
-              </div>
-            )}
-          </div>
-        ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         {!mainText && isProcessing && (
-           <div className="flex justify-center p-4">
-               <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-gold-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                  <div className="w-2 h-2 bg-gold-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                  <div className="w-2 h-2 bg-gold-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-               </div>
-           </div>
+          <div className="flex justify-center p-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-gold-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div
+                className="w-2 h-2 bg-gold-500 rounded-full animate-bounce"
+                style={{ animationDelay: '150ms' }}
+              ></div>
+              <div
+                className="w-2 h-2 bg-gold-500 rounded-full animate-bounce"
+                style={{ animationDelay: '300ms' }}
+              ></div>
+            </div>
+          </div>
         )}
         <div ref={messagesEndRef} />
       </div>

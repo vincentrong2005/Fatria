@@ -125,13 +125,12 @@ const App: React.FC = () => {
       </button>
       {/* Background Layer */}
       <div className="fixed inset-0 z-0 pointer-events-none">
-         <div className="absolute inset-0 bg-gradient-radial from-stone-900 to-black opacity-80"></div>
-         {/* Subtle Vignette */}
-         <div className="absolute inset-0 shadow-[inset_0_0_150px_rgba(0,0,0,0.9)]"></div>
+        <div className="absolute inset-0 bg-gradient-radial from-stone-900 to-black opacity-80"></div>
+        {/* Subtle Vignette */}
+        <div className="absolute inset-0 shadow-[inset_0_0_150px_rgba(0,0,0,0.9)]"></div>
       </div>
 
       <div className="relative z-10 w-full max-w-[1600px] min-h-[760px] flex gap-3">
-
         {/* Left Sidebar: Character & Status */}
         <LeftSidebar character={character} global={globalState} mvuStat={mvuStat} />
 
@@ -141,18 +140,13 @@ const App: React.FC = () => {
           onSendMessage={handleSendMessage}
           isProcessing={isProcessing}
           mainText={mainText}
-          registerPrefillHandler={(fn) => {
+          registerPrefillHandler={fn => {
             prefillInputRef.current = fn;
           }}
         />
 
         {/* Right Sidebar: Inventory & Menu */}
-        <RightSidebar
-          character={character}
-          news={news}
-          onOpenModal={setActiveModal}
-        />
-
+        <RightSidebar character={character} news={news} onOpenModal={setActiveModal} />
       </div>
 
       {/* Modal Overlay */}
@@ -163,7 +157,7 @@ const App: React.FC = () => {
         character={character}
         mvuStat={mvuStat}
         isFullscreen={isFullscreen}
-        onSkillToChat={(text) => {
+        onSkillToChat={text => {
           prefillInputRef.current?.(text);
         }}
       />
@@ -181,7 +175,10 @@ function extractValue<T>(value: any, fallback: T): T {
 
 function getPath(obj: any, path: string, fallback: any = undefined) {
   if (!obj) return fallback;
-  const segments = path.replace(/\[(\w+)\]/g, '.$1').split('.').filter(Boolean);
+  const segments = path
+    .replace(/\[(\w+)\]/g, '.$1')
+    .split('.')
+    .filter(Boolean);
   let current = obj;
   for (const key of segments) {
     if (current && Object.prototype.hasOwnProperty.call(current, key)) {
@@ -270,7 +267,8 @@ function mapMvuToCharacter(data: any): Character | null {
   };
 
   const inventoryList = getPath(stat, '主角.背包', {});
-  const inventoryKeys = inventoryList && typeof inventoryList === 'object' ? Object.keys(inventoryList).filter(k => k !== '$meta') : [];
+  const inventoryKeys =
+    inventoryList && typeof inventoryList === 'object' ? Object.keys(inventoryList).filter(k => k !== '$meta') : [];
   const inventory = inventoryKeys.map((key, idx) => {
     const item = inventoryList[key] ?? {};
     const rawQuality = String(item.品质 ?? '普通');
