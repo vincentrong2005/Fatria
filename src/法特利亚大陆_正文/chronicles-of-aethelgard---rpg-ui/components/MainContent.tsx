@@ -1,4 +1,4 @@
-import { Settings2, Sparkles, X } from 'lucide-react';
+import { Save, Settings2, Sparkles, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { Message } from '../types';
 
@@ -38,6 +38,8 @@ export const MainContent: React.FC<MainContentProps> = ({
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showUpdateContent, setShowUpdateContent] = useState(false);
+  const [updateContent, setUpdateContent] = useState<string>('');
 
   // 默认设置
   const defaultSettings: TextSettings = {
@@ -67,19 +69,12 @@ export const MainContent: React.FC<MainContentProps> = ({
           fontFamily: typeof saved.fontFamily === 'string' ? saved.fontFamily : defaultSettings.fontFamily,
           offsetX: typeof saved.offsetX === 'number' ? saved.offsetX : defaultSettings.offsetX,
           frameEnabled: typeof saved.frameEnabled === 'boolean' ? saved.frameEnabled : defaultSettings.frameEnabled,
-          quoteColors:
-            saved.quoteColors && typeof saved.quoteColors === 'object'
-              ? {
-                  double:
-                    typeof saved.quoteColors.double === 'string'
-                      ? saved.quoteColors.double
-                      : defaultSettings.quoteColors.double,
-                  chineseLeft:
-                    typeof saved.quoteColors.chineseLeft === 'string'
-                      ? saved.quoteColors.chineseLeft
-                      : defaultSettings.quoteColors.chineseLeft,
-                }
-              : defaultSettings.quoteColors,
+          quoteColors: saved.quoteColors && typeof saved.quoteColors === 'object'
+            ? {
+                double: typeof saved.quoteColors.double === 'string' ? saved.quoteColors.double : defaultSettings.quoteColors.double,
+                chineseLeft: typeof saved.quoteColors.chineseLeft === 'string' ? saved.quoteColors.chineseLeft : defaultSettings.quoteColors.chineseLeft,
+              }
+            : defaultSettings.quoteColors,
         };
       }
     } catch (err) {
@@ -91,6 +86,36 @@ export const MainContent: React.FC<MainContentProps> = ({
   const [settings, setSettings] = useState<TextSettings>(loadSettings);
   const [inputValue, setInputValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // 提取并显示 update 标签内容
+  const showUpdateContentModal = () => {
+    try {
+      // @ts-expect-error getChatMessages 为全局注入
+      const messages = getChatMessages(-1, { role: 'assistant', hide_state: 'all' });
+      const raw = messages[0]?.message ?? '';
+      if (!raw) {
+        // @ts-expect-error toastr 为全局注入
+        toastr.warning('没有找到可查看的内容', '查看失败');
+        return;
+      }
+
+      // 提取 <update> 或 <UpdateVariable> 标签内容
+      const updateMatch = raw.match(/<(?:update|UpdateVariable)>([\s\S]*?)<\/(?:update|UpdateVariable)>/i);
+      if (!updateMatch || !updateMatch[1]) {
+        // @ts-expect-error toastr 为全局注入
+        toastr.warning('未找到 <update> 或 <UpdateVariable> 标签', '查看失败');
+        return;
+      }
+
+      const content = updateMatch[1].trim();
+      setUpdateContent(content);
+      setShowUpdateContent(true);
+    } catch (err) {
+      console.error('提取 update 内容失败', err);
+      // @ts-expect-error toastr 为全局注入
+      toastr.error('提取失败，请重试', '错误');
+    }
+  };
 
   // 保存设置到聊天变量
   const saveSettings = (newSettings: TextSettings) => {
@@ -124,7 +149,7 @@ export const MainContent: React.FC<MainContentProps> = ({
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
@@ -218,28 +243,30 @@ export const MainContent: React.FC<MainContentProps> = ({
       // 添加引号前的文本（保留换行符）
       if (match.start > lastIndex) {
         const beforeText = text.substring(lastIndex, match.start);
-        parts.push(<React.Fragment key={key++}>{beforeText}</React.Fragment>);
+        parts.push(
+          <React.Fragment key={key++}>{beforeText}</React.Fragment>
+        );
       }
 
       // 添加引号开始
       parts.push(
         <span key={key++} style={{ color: match.color }}>
           {text[match.start]}
-        </span>,
+        </span>
       );
 
       // 添加引号内的内容（带颜色，保留换行符）
       parts.push(
         <span key={key++} style={{ color: match.color }}>
           {match.content}
-        </span>,
+        </span>
       );
 
       // 添加引号结束
       parts.push(
         <span key={key++} style={{ color: match.color }}>
           {text[match.end]}
-        </span>,
+        </span>
       );
 
       lastIndex = match.end + 1;
@@ -248,7 +275,9 @@ export const MainContent: React.FC<MainContentProps> = ({
     // 添加剩余文本（保留换行符）
     if (lastIndex < text.length) {
       const remainingText = text.substring(lastIndex);
-      parts.push(<React.Fragment key={key++}>{remainingText}</React.Fragment>);
+      parts.push(
+        <React.Fragment key={key++}>{remainingText}</React.Fragment>
+      );
     }
 
     return parts.length > 0 ? <>{parts}</> : text;
@@ -273,197 +302,182 @@ export const MainContent: React.FC<MainContentProps> = ({
 
       {/* Header / Title */}
       <div className="p-4 border-b border-[#2f3040] bg-[#0c0e16bf] backdrop-blur-xl flex justify-between items-center z-10 shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.55)]">
-        <div className="flex items-center gap-2">
-          <Sparkles size={16} className="text-[var(--gold-500)] animate-pulse-slow" />
-          <h1 className="font-display text-[var(--gold-100)] text-lg tracking-[0.2em] drop-shadow-xl">命运轨迹</h1>
-        </div>
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          className={`p-2 rounded-lg border border-transparent hover:border-[var(--gold-500)] hover:bg-white/5 transition-all ${showSettings ? 'text-[var(--gold-300)]' : 'text-stone-400'}`}
-        >
-          <Settings2 size={18} />
-        </button>
+         <div className="flex items-center gap-2">
+            <Sparkles size={16} className="text-[var(--gold-500)] animate-pulse-slow" />
+            <h1 className="font-display text-[var(--gold-100)] text-lg tracking-[0.2em] drop-shadow-xl">命运轨迹</h1>
+         </div>
+         <div className="flex items-center gap-2">
+            <button
+              onClick={showUpdateContentModal}
+              className="p-2 rounded-lg border border-transparent hover:border-[var(--gold-500)] hover:bg-white/5 transition-all text-stone-400 hover:text-[var(--gold-300)]"
+              title="查看 update 内容"
+            >
+               <Save size={18} />
+            </button>
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className={`p-2 rounded-lg border border-transparent hover:border-[var(--gold-500)] hover:bg-white/5 transition-all mr-20 ${showSettings ? 'text-[var(--gold-300)]' : 'text-stone-400'}`}
+            >
+               <Settings2 size={18} />
+            </button>
+         </div>
       </div>
+
+      {/* Update Content Panel */}
+      {showUpdateContent && (
+         <div className={`absolute top-16 z-20 w-96 max-h-[80vh] bg-[#0f1018f2] border border-[var(--gold-700)]/40 rounded-xl p-4 shadow-[0_15px_40px_rgba(0,0,0,0.6)] backdrop-blur-xl animate-slideUp flex flex-col ${showSettings ? 'right-[280px]' : 'right-4'}`}>
+            <div className="flex justify-between items-center mb-3 border-b border-[#2f3040] pb-2 shrink-0">
+               <span className="text-xs font-display text-[var(--gold-100)] uppercase tracking-widest">Update 内容</span>
+               <button onClick={() => setShowUpdateContent(false)} className="text-stone-500 hover:text-stone-200"><X size={14}/></button>
+            </div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+               <pre className="text-xs text-stone-300 font-mono whitespace-pre-wrap break-words leading-relaxed">
+                  {updateContent || '未找到内容'}
+               </pre>
+            </div>
+         </div>
+      )}
 
       {/* Settings Panel */}
       {showSettings && (
-        <div className="absolute top-16 right-4 z-20 w-64 bg-[#0f1018f2] border border-[var(--gold-700)]/40 rounded-xl p-4 shadow-[0_15px_40px_rgba(0,0,0,0.6)] backdrop-blur-xl animate-slideUp">
-          <div className="flex justify-between items-center mb-3 border-b border-[#2f3040] pb-2">
-            <span className="text-xs font-display text-[var(--gold-100)] uppercase tracking-widest">阅读设置</span>
-            <button onClick={() => setShowSettings(false)} className="text-stone-500 hover:text-stone-200">
-              <X size={14} />
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            {/* Width Control */}
-            <div>
-              <label className="text-[10px] text-stone-400 uppercase block mb-1">文本宽度 ({settings.width}%)</label>
-              <input
-                type="range"
-                min="50"
-                max="100"
-                step="5"
-                value={settings.width}
-                onChange={e => updateSettings({ ...settings, width: parseInt(e.target.value) })}
-                className="w-full h-1 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
-              />
+         <div className="absolute top-16 right-4 z-20 w-64 bg-[#0f1018f2] border border-[var(--gold-700)]/40 rounded-xl p-4 shadow-[0_15px_40px_rgba(0,0,0,0.6)] backdrop-blur-xl animate-slideUp">
+            <div className="flex justify-between items-center mb-3 border-b border-[#2f3040] pb-2">
+               <span className="text-xs font-display text-[var(--gold-100)] uppercase tracking-widest">阅读设置</span>
+               <button onClick={() => setShowSettings(false)} className="text-stone-500 hover:text-stone-200"><X size={14}/></button>
             </div>
 
-            {/* Frame Toggle */}
-            <div className="flex items-center justify-between pt-1">
-              <label className="text-[10px] text-stone-400 uppercase">正文外框</label>
-              <button
-                type="button"
-                onClick={() =>
-                  updateSettings({
-                    ...settings,
-                    frameEnabled: !settings.frameEnabled,
-                    // 关闭外框时自动把宽度调到 100%，避免缩窄
-                    width: !settings.frameEnabled ? settings.width : 100,
-                  })
-                }
-                className={`text-[10px] px-2 py-1 rounded border ${
-                  settings.frameEnabled
-                    ? 'border-[var(--gold-500)] text-[var(--gold-200)] bg-[var(--gold-500)]/10'
-                    : 'border-stone-600 text-stone-400 bg-transparent'
-                }`}
-              >
-                {settings.frameEnabled ? '使用命运轨迹外框' : '直接显示在背景上'}
-              </button>
-            </div>
-
-            {/* Horizontal Offset */}
-            <div>
-              <label className="text-[10px] text-stone-400 uppercase block mb-1">水平偏移 ({settings.offsetX}px)</label>
-              <input
-                type="range"
-                min="-200"
-                max="200"
-                step="10"
-                value={settings.offsetX}
-                onChange={e => updateSettings({ ...settings, offsetX: parseInt(e.target.value) })}
-                className="w-full h-1 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
-              />
-              <p className="mt-1 text-[10px] text-stone-500">负值向左移动，正值向右移动。</p>
-            </div>
-
-            {/* Font Size Control */}
-            <div>
-              <label className="text-[10px] text-stone-400 uppercase block mb-1">
-                字体大小 ({settings.fontSize}px)
-              </label>
-              <input
-                type="range"
-                min="12"
-                max="24"
-                step="1"
-                value={settings.fontSize}
-                onChange={e => updateSettings({ ...settings, fontSize: parseInt(e.target.value) })}
-                className="w-full h-1 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
-              />
-            </div>
-
-            {/* Letter Spacing Control */}
-            <div>
-              <label className="text-[10px] text-stone-400 uppercase block mb-1">
-                字间距 ({settings.letterSpacing}px)
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="5"
-                step="0.5"
-                value={settings.letterSpacing}
-                onChange={e => updateSettings({ ...settings, letterSpacing: parseFloat(e.target.value) })}
-                className="w-full h-1 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
-              />
-            </div>
-
-            {/* Font Family Control */}
-            <div>
-              <label className="text-[10px] text-stone-400 uppercase block mb-1">字体风格</label>
-              <select
-                value={settings.fontFamily}
-                onChange={e => updateSettings({ ...settings, fontFamily: e.target.value })}
-                className="w-full bg-[#0b0d13] border border-[#2f3040] text-[var(--gold-100)] text-xs rounded p-1 focus:border-[var(--gold-500)] outline-none"
-              >
-                <option value="font-serif">衬线 (Serif)</option>
-                <option value="font-sans">无衬线 (Sans)</option>
-                <option value="font-mono">等宽 (Mono)</option>
-                <option value="font-display">展示 (Display)</option>
-              </select>
-            </div>
-
-            {/* Frame Outer Margin Toggle */}
-            <div className="flex items-center justify-between pt-1">
-              <label className="text-[10px] text-stone-400 uppercase">外边距</label>
-              <button
-                type="button"
-                onClick={() =>
-                  updateSettings({
-                    ...settings,
-                    frameEnabled: !settings.frameEnabled,
-                  })
-                }
-                className={`text-[10px] px-2 py-1 rounded border ${
-                  settings.frameEnabled
-                    ? 'border-stone-600 text-stone-400 bg-transparent'
-                    : 'border-[var(--gold-500)] text-[var(--gold-200)] bg-[var(--gold-500)]/10'
-                }`}
-              >
-                {settings.frameEnabled ? '保留外边距' : '填满屏幕'}
-              </button>
-            </div>
-
-            {/* Quote Colors Control */}
-            <div className="border-t border-[#2f3040] pt-4 mt-4">
-              <label className="text-[10px] text-stone-400 uppercase block mb-2">引号颜色</label>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <label className="text-[10px] text-stone-500 w-16">双引号 ""</label>
+            <div className="space-y-4">
+               {/* Width Control */}
+               <div>
+                  <label className="text-[10px] text-stone-400 uppercase block mb-1">文本宽度 ({settings.width}%)</label>
                   <input
-                    type="color"
-                    value={settings.quoteColors.double}
-                    onChange={e =>
+                    type="range" min="50" max="100" step="5"
+                    value={settings.width}
+                    onChange={(e) => updateSettings({...settings, width: parseInt(e.target.value)})}
+                    className="w-full h-1 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
+                  />
+               </div>
+
+               {/* Frame Toggle */}
+               <div className="flex items-center justify-between pt-1">
+                  <label className="text-[10px] text-stone-400 uppercase">正文外框</label>
+                  <button
+                    type="button"
+                    onClick={() =>
                       updateSettings({
                         ...settings,
-                        quoteColors: { ...settings.quoteColors, double: e.target.value },
+                        frameEnabled: !settings.frameEnabled,
+                        // 关闭外框时自动把宽度调到 100%，避免缩窄
+                        width: !settings.frameEnabled ? settings.width : 100,
                       })
                     }
-                    className="flex-1 h-6 rounded border border-[#2f3040] cursor-pointer"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-[10px] text-stone-500 w-16">中文「」</label>
+                    className={`text-[10px] px-2 py-1 rounded border ${
+                      settings.frameEnabled
+                        ? 'border-[var(--gold-500)] text-[var(--gold-200)] bg-[var(--gold-500)]/10'
+                        : 'border-stone-600 text-stone-400 bg-transparent'
+                    }`}
+                  >
+                    {settings.frameEnabled ? '使用命运轨迹外框' : '直接显示在背景上'}
+                  </button>
+               </div>
+
+               {/* Horizontal Offset */}
+               <div>
+                  <label className="text-[10px] text-stone-400 uppercase block mb-1">
+                    水平偏移 ({settings.offsetX}px)
+                  </label>
                   <input
-                    type="color"
-                    value={settings.quoteColors.chineseLeft}
-                    onChange={e =>
-                      updateSettings({
-                        ...settings,
-                        quoteColors: { ...settings.quoteColors, chineseLeft: e.target.value },
-                      })
-                    }
-                    className="flex-1 h-6 rounded border border-[#2f3040] cursor-pointer"
+                    type="range"
+                    min="-200"
+                    max="200"
+                    step="10"
+                    value={settings.offsetX}
+                    onChange={(e) => updateSettings({ ...settings, offsetX: parseInt(e.target.value) })}
+                    className="w-full h-1 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
                   />
-                </div>
-              </div>
+                  <p className="mt-1 text-[10px] text-stone-500">
+                    负值向左移动，正值向右移动。
+                  </p>
+               </div>
+
+               {/* Font Size Control */}
+               <div>
+                  <label className="text-[10px] text-stone-400 uppercase block mb-1">字体大小 ({settings.fontSize}px)</label>
+                  <input
+                    type="range" min="12" max="24" step="1"
+                    value={settings.fontSize}
+                    onChange={(e) => updateSettings({...settings, fontSize: parseInt(e.target.value)})}
+                    className="w-full h-1 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
+                  />
+               </div>
+
+               {/* Letter Spacing Control */}
+               <div>
+                  <label className="text-[10px] text-stone-400 uppercase block mb-1">字间距 ({settings.letterSpacing}px)</label>
+                  <input
+                    type="range" min="0" max="5" step="0.5"
+                    value={settings.letterSpacing}
+                    onChange={(e) => updateSettings({...settings, letterSpacing: parseFloat(e.target.value)})}
+                    className="w-full h-1 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-gold-500"
+                  />
+               </div>
+
+               {/* Font Family Control */}
+               <div>
+                  <label className="text-[10px] text-stone-400 uppercase block mb-1">字体风格</label>
+                  <select
+                    value={settings.fontFamily}
+                    onChange={(e) => updateSettings({...settings, fontFamily: e.target.value})}
+                    className="w-full bg-[#0b0d13] border border-[#2f3040] text-[var(--gold-100)] text-xs rounded p-1 focus:border-[var(--gold-500)] outline-none"
+                  >
+                     <option value="font-serif">衬线 (Serif)</option>
+                     <option value="font-sans">无衬线 (Sans)</option>
+                     <option value="font-mono">等宽 (Mono)</option>
+                     <option value="font-display">展示 (Display)</option>
+                  </select>
+               </div>
+
+               {/* Quote Colors Control */}
+               <div className="border-t border-[#2f3040] pt-4 mt-4">
+                  <label className="text-[10px] text-stone-400 uppercase block mb-2">引号颜色</label>
+                  <div className="space-y-2">
+                     <div className="flex items-center gap-2">
+                        <label className="text-[10px] text-stone-500 w-16">双引号 ""</label>
+                        <input
+                          type="color"
+                          value={settings.quoteColors.double}
+                          onChange={(e) => updateSettings({
+                            ...settings,
+                            quoteColors: { ...settings.quoteColors, double: e.target.value }
+                          })}
+                          className="flex-1 h-6 rounded border border-[#2f3040] cursor-pointer"
+                        />
+                     </div>
+                     <div className="flex items-center gap-2">
+                        <label className="text-[10px] text-stone-500 w-16">中文「」</label>
+                        <input
+                          type="color"
+                          value={settings.quoteColors.chineseLeft}
+                          onChange={(e) => updateSettings({
+                            ...settings,
+                            quoteColors: { ...settings.quoteColors, chineseLeft: e.target.value }
+                          })}
+                          className="flex-1 h-6 rounded border border-[#2f3040] cursor-pointer"
+                        />
+                     </div>
+                  </div>
+               </div>
             </div>
-          </div>
-        </div>
+         </div>
       )}
 
       {/* Main Area */}
-      <div
-        className="flex-1 overflow-y-auto space-y-6 custom-scrollbar z-10 scroll-smooth"
-        style={{ padding: settings.width === 100 ? '0' : '1.5rem' }}
-      >
+      <div className="flex-1 overflow-y-auto space-y-6 custom-scrollbar z-10 scroll-smooth" style={{ padding: settings.width === 100 ? '0' : '1.5rem' }}>
         {mainText && (
-          <div
-            className="w-full flex flex-col items-center gap-4"
-            style={{ transform: `translateX(${settings.offsetX}px)` }}
-          >
+        <div
+          className="w-full flex flex-col items-center gap-4"
+          style={{ transform: `translateX(${settings.offsetX}px)` }}
+        >
             {settings.frameEnabled ? (
               <div
                 className={`
@@ -508,13 +522,7 @@ export const MainContent: React.FC<MainContentProps> = ({
 
             {/* 选项按钮区域 */}
             {options.length > 0 && (
-              <div
-                className="w-full flex justify-center"
-                style={{
-                  paddingLeft: settings.width === 100 ? '0' : undefined,
-                  paddingRight: settings.width === 100 ? '0' : undefined,
-                }}
-              >
+              <div className="w-full flex justify-center" style={{ paddingLeft: settings.width === 100 ? '0' : undefined, paddingRight: settings.width === 100 ? '0' : undefined }}>
                 <div
                   className="flex flex-col gap-3"
                   style={{
@@ -545,7 +553,9 @@ export const MainContent: React.FC<MainContentProps> = ({
                               {optionLabel}
                             </div>
                             <div className="flex-1">
-                              <div className="text-sm text-[var(--gold-100)] font-serif leading-relaxed">{option}</div>
+                              <div className="text-sm text-[var(--gold-100)] font-serif leading-relaxed">
+                                {option}
+                              </div>
                             </div>
                           </div>
                         </button>
@@ -557,13 +567,7 @@ export const MainContent: React.FC<MainContentProps> = ({
             )}
 
             {/* 正文下方输入框 */}
-            <div
-              className="w-full flex justify-center"
-              style={{
-                paddingLeft: settings.width === 100 ? '0' : undefined,
-                paddingRight: settings.width === 100 ? '0' : undefined,
-              }}
-            >
+            <div className="w-full flex justify-center" style={{ paddingLeft: settings.width === 100 ? '0' : undefined, paddingRight: settings.width === 100 ? '0' : undefined }}>
               <div
                 className="flex items-start gap-2"
                 style={{
@@ -576,8 +580,8 @@ export const MainContent: React.FC<MainContentProps> = ({
                   className="flex-1 bg-[#080910] border border-[var(--gold-700)]/40 rounded-lg px-4 py-2 text-sm text-[var(--gold-100)] placeholder:text-stone-500 focus:outline-none focus:border-[var(--gold-500)] focus:ring-1 focus:ring-[var(--gold-500)] shadow-[0_0_12px_rgba(0,0,0,0.8)] resize-none min-h-[44px] max-h-[200px] overflow-y-auto custom-scrollbar leading-relaxed"
                   placeholder="在此输入你对当前局面的行动、发言或指令，按 Enter 发送，Shift+Enter 换行……"
                   value={inputValue}
-                  onChange={e => setInputValue(e.target.value)}
-                  onKeyDown={e => {
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
                       handleSubmit();
@@ -587,86 +591,70 @@ export const MainContent: React.FC<MainContentProps> = ({
                   style={{
                     fontSize: `${settings.fontSize}px`,
                     letterSpacing: `${settings.letterSpacing}px`,
-                    fontFamily:
-                      settings.fontFamily === 'font-serif'
-                        ? 'serif'
-                        : settings.fontFamily === 'font-sans'
-                          ? 'sans-serif'
-                          : settings.fontFamily === 'font-mono'
-                            ? 'monospace'
-                            : settings.fontFamily === 'font-display'
-                              ? 'Cinzel, "Cormorant Garamond", "Noto Serif SC", serif'
-                              : 'inherit',
+                    fontFamily: settings.fontFamily === 'font-serif' ? 'serif' :
+                                settings.fontFamily === 'font-sans' ? 'sans-serif' :
+                                settings.fontFamily === 'font-mono' ? 'monospace' :
+                                settings.fontFamily === 'font-display' ? 'Cinzel, "Cormorant Garamond", "Noto Serif SC", serif' : 'inherit',
                   }}
                 />
               </div>
             </div>
           </div>
         )}
-        {!mainText &&
-          chatLog.map((msg, index) => (
-            <div
-              key={index}
-              className={`flex flex-col items-center animate-fadeIn`}
-              style={{ animationDelay: `${index * 50}ms` }}
-            >
-              {msg.role === 'system' && (
-                <div className="w-full text-center my-4">
-                  <span className="text-xs text-gold-700/60 font-mono border-b border-gold-900/30 pb-1 px-4">
-                    {msg.content}
-                  </span>
-                </div>
-              )}
+        {!mainText && chatLog.map((msg, index) => (
+          <div
+            key={index}
+            className={`flex flex-col items-center animate-fadeIn`}
+            style={{ animationDelay: `${index * 50}ms` }}
+          >
+            {msg.role === 'system' && (
+              <div className="w-full text-center my-4">
+                 <span className="text-xs text-gold-700/60 font-mono border-b border-gold-900/30 pb-1 px-4">{msg.content}</span>
+              </div>
+            )}
 
-              {msg.role !== 'system' && (
-                <div className="flex flex-col w-full" style={{ width: `${settings.width}%` }}>
-                  <span
-                    className={`text-[10px] text-stone-600 mb-1 px-1 uppercase tracking-wider font-bold ${msg.role === 'user' ? 'text-right' : 'text-left'}`}
-                  >
+            {msg.role !== 'system' && (
+              <div
+                className="flex flex-col w-full"
+                style={{ width: `${settings.width}%` }}
+              >
+                 <span className={`text-[10px] text-stone-600 mb-1 px-1 uppercase tracking-wider font-bold ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
                     {msg.role === 'user' ? '你' : '地下城主 (DM)'}
-                  </span>
-                  <div
-                    className={`
+                 </span>
+                 <div
+                   className={`
                      p-6 rounded-lg leading-relaxed shadow-lg text-left relative
-                     ${
-                       msg.role === 'user'
-                         ? 'bg-stone-900/90 text-stone-200 border border-stone-700'
-                         : 'bg-gradient-to-br from-stone-950 to-black text-stone-300 border border-gold-900/40'
-                     }
+                     ${msg.role === 'user'
+                       ? 'bg-stone-900/90 text-stone-200 border border-stone-700'
+                       : 'bg-gradient-to-br from-stone-950 to-black text-stone-300 border border-gold-900/40'}
                      ${settings.fontFamily}
                    `}
-                    style={{
-                      fontSize: `${settings.fontSize}px`,
-                      letterSpacing: `${settings.letterSpacing}px`,
-                    }}
-                  >
+                   style={{
+                     fontSize: `${settings.fontSize}px`,
+                     letterSpacing: `${settings.letterSpacing}px`
+                   }}
+                 >
                     {msg.role === 'model' && (
-                      // Corner accents for model messages
-                      <>
-                        <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-gold-600/40"></div>
-                        <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-gold-600/40"></div>
-                      </>
+                       // Corner accents for model messages
+                       <>
+                         <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-gold-600/40"></div>
+                         <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-gold-600/40"></div>
+                       </>
                     )}
                     <div className="whitespace-pre-wrap">{msg.content}</div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        {!mainText && isProcessing && (
-          <div className="flex justify-center p-4">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-gold-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-              <div
-                className="w-2 h-2 bg-gold-500 rounded-full animate-bounce"
-                style={{ animationDelay: '150ms' }}
-              ></div>
-              <div
-                className="w-2 h-2 bg-gold-500 rounded-full animate-bounce"
-                style={{ animationDelay: '300ms' }}
-              ></div>
-            </div>
+                 </div>
+              </div>
+            )}
           </div>
+        ))}
+        {!mainText && isProcessing && (
+           <div className="flex justify-center p-4">
+               <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-gold-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                  <div className="w-2 h-2 bg-gold-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-2 h-2 bg-gold-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+               </div>
+           </div>
         )}
         <div ref={messagesEndRef} />
       </div>

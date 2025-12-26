@@ -75,6 +75,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const bootstrapMvu = async () => {
       try {
+
         const globalAny = window as any;
         if (globalAny.waitGlobalInitialized) {
           await globalAny.waitGlobalInitialized('Mvu');
@@ -163,13 +164,17 @@ const App: React.FC = () => {
       {/* 顶部控制按钮区域：左右栏开关 + 全屏 */}
       <div className="absolute top-4 left-4 z-30 flex flex-wrap gap-2">
         <button
-          onClick={() => updateSidebarState({ left: !showLeftSidebar, right: showRightSidebar })}
+          onClick={() =>
+            updateSidebarState({ left: !showLeftSidebar, right: showRightSidebar })
+          }
           className="px-3 py-1 rounded-md border border-[#3a2a0f] bg-[#0f1018cc] text-[var(--gold-100)] shadow-[0_10px_30px_rgba(0,0,0,0.6)] hover:border-[var(--gold-500)] hover:shadow-[0_10px_30px_rgba(214,167,79,0.35)] backdrop-blur-md transition-all duration-200 text-[10px] tracking-widest"
         >
           {showLeftSidebar ? '隐藏左栏' : '显示左栏'}
         </button>
         <button
-          onClick={() => updateSidebarState({ left: showLeftSidebar, right: !showRightSidebar })}
+          onClick={() =>
+            updateSidebarState({ left: showLeftSidebar, right: !showRightSidebar })
+          }
           className="px-3 py-1 rounded-md border border-[#3a2a0f] bg-[#0f1018cc] text-[var(--gold-100)] shadow-[0_10px_30px_rgba(0,0,0,0.6)] hover:border-[var(--gold-500)] hover:shadow-[0_10px_30px_rgba(214,167,79,0.35)] backdrop-blur-md transition-all duration-200 text-[10px] tracking-widest"
         >
           {showRightSidebar ? '隐藏右栏' : '显示右栏'}
@@ -185,9 +190,9 @@ const App: React.FC = () => {
       </button>
       {/* Background Layer */}
       <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute inset-0 bg-gradient-radial from-stone-900 to-black opacity-80"></div>
-        {/* Subtle Vignette */}
-        <div className="absolute inset-0 shadow-[inset_0_0_150px_rgba(0,0,0,0.9)]"></div>
+         <div className="absolute inset-0 bg-gradient-radial from-stone-900 to-black opacity-80"></div>
+         {/* Subtle Vignette */}
+         <div className="absolute inset-0 shadow-[inset_0_0_150px_rgba(0,0,0,0.9)]"></div>
       </div>
 
       <div className="relative z-10 w-full max-w-[1600px] min-h-[760px]">
@@ -199,7 +204,7 @@ const App: React.FC = () => {
             isProcessing={isProcessing}
             mainText={mainText}
             options={options}
-            registerPrefillHandler={fn => {
+            registerPrefillHandler={(fn) => {
               prefillInputRef.current = fn;
             }}
             expandFull
@@ -229,7 +234,7 @@ const App: React.FC = () => {
         character={character}
         mvuStat={mvuStat}
         isFullscreen={isFullscreen}
-        onSkillToChat={text => {
+        onSkillToChat={(text) => {
           prefillInputRef.current?.(text);
         }}
       />
@@ -247,10 +252,7 @@ function extractValue<T>(value: any, fallback: T): T {
 
 function getPath(obj: any, path: string, fallback: any = undefined) {
   if (!obj) return fallback;
-  const segments = path
-    .replace(/\[(\w+)\]/g, '.$1')
-    .split('.')
-    .filter(Boolean);
+  const segments = path.replace(/\[(\w+)\]/g, '.$1').split('.').filter(Boolean);
   let current = obj;
   for (const key of segments) {
     if (current && Object.prototype.hasOwnProperty.call(current, key)) {
@@ -339,8 +341,7 @@ function mapMvuToCharacter(data: any): Character | null {
   };
 
   const inventoryList = getPath(stat, '主角.背包', {});
-  const inventoryKeys =
-    inventoryList && typeof inventoryList === 'object' ? Object.keys(inventoryList).filter(k => k !== '$meta') : [];
+  const inventoryKeys = inventoryList && typeof inventoryList === 'object' ? Object.keys(inventoryList).filter(k => k !== '$meta') : [];
   const inventory = inventoryKeys.map((key, idx) => {
     const item = inventoryList[key] ?? {};
     const rawQuality = String(item.品质 ?? '普通');
@@ -404,7 +405,7 @@ function mapMvuToGlobal(data: any): GameGlobal | null {
       parts.push(place);
     }
 
-    location = parts.length > 0 ? parts.join(' > ') : region || '未知地点';
+    location = parts.length > 0 ? parts.join(' > ') : (region || '未知地点');
   } else if (typeof locationObj === 'string') {
     // 兼容旧数据：如果位置还是字符串，直接使用
     location = locationObj || '未知地点';
@@ -451,9 +452,7 @@ function extractContentFromRaw(raw: string): { content: string; options: string[
   const content = contentMatch && contentMatch[1] ? contentMatch[1].trim() : processed.trim();
 
   // 提取 <option> 标签内的选项
-  const optionMatch = processed.match(
-    /<option>\s*A\.\s*([\s\S]*?)\s*B\.\s*([\s\S]*?)\s*C\.\s*([\s\S]*?)\s*D\.\s*([\s\S]*?)<\/option>/i,
-  );
+  const optionMatch = processed.match(/<option>\s*A\.\s*([\s\S]*?)\s*B\.\s*([\s\S]*?)\s*C\.\s*([\s\S]*?)\s*D\.\s*([\s\S]*?)<\/option>/i);
   const extractedOptions: string[] = [];
   if (optionMatch) {
     // 提取 A, B, C, D 四个选项，去除首尾空白
