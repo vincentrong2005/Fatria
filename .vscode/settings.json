@@ -49,6 +49,10 @@
   "[vue]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
+<<<<<<< HEAD
   "typescript.tsdk": "node_modules/typescript/lib",
   "chatgpt.openOnStartup": true
+=======
+  "typescript.tsdk": "node_modules/typescript/lib"
+>>>>>>> 95299edcaebf7bb81b1a8d87fb1226c74ed1188a
 }
