@@ -140,8 +140,6 @@ const OtherItemSchema = BaseItemSchema.extend({
 const BackpackItemSchema = z.discriminatedUnion('类型', [EquipmentInBagSchema, ConsumableItemSchema, OtherItemSchema]);
 
 export const Schema = z.object({
-  schema版本: z.literal(2).prefault(2),
-
   角色基础: z
     .object({
       _等级: z.coerce
@@ -181,10 +179,10 @@ export const Schema = z.object({
 
   基础属性: z
     .object({
-      魅力: z.coerce.number().min(0).prefault(10),
-      幸运: z.coerce.number().min(0).prefault(10),
-      闪避率: z.coerce.number().min(0).prefault(0),
-      暴击率: z.coerce
+      _魅力: z.coerce.number().min(0).prefault(10),
+      _幸运: z.coerce.number().min(0).prefault(10),
+      _闪避率: z.coerce.number().min(0).prefault(0),
+      _暴击率: z.coerce
         .number()
         .transform(n => clamp(n, 0, 100))
         .prefault(0),
