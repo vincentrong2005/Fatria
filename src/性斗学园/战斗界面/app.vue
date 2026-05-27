@@ -3988,7 +3988,7 @@ async function endTurn(): Promise<boolean> {
 async function selectAndDisplayCG() {
   try {
     const playerGender = await readPlayerGender('男');
-    const selection = selectCombatCG({
+    const selection = await selectCombatCG({
       enemyName: enemy.value.name,
       playerGender,
       phase: turnState.phase,
