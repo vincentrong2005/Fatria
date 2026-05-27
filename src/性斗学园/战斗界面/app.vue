@@ -499,6 +499,20 @@
 
     <!-- 战斗特效 -->
     <CombatEffect v-if="effectType" :type="effectType!" :show="showEffect" />
+
+    <!-- 协同作战立绘特效 -->
+    <div v-if="companionAssistEffect" class="companion-assist-effect">
+      <div class="companion-assist-strike"></div>
+      <img
+        class="companion-assist-portrait"
+        :src="companionAssistEffect.avatarUrl"
+        :alt="companionAssistEffect.name"
+      />
+      <div class="companion-assist-caption">
+        <span class="companion-name">{{ companionAssistEffect.name }}</span>
+        <span class="companion-skill">{{ companionAssistEffect.skillName }}</span>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -541,6 +555,16 @@ import {
   type BossClimaxAction,
 } from './combatClimaxBoss';
 import { buildCombatEndContext, createPostBattleRecoveryLogs, selectCombatCG } from './combatConclusion';
+import {
+  COOPERATION_CHANCE_STEP,
+  createCooperationCompanion,
+  createCooperationRoll,
+  getPresentCompanionNames,
+  hasActiveExorcismMazeSideQuest,
+  pickCooperationAction,
+  resolveCompanionSkillAttack,
+  type CooperationCompanion,
+} from './combatCooperation';
 import {
   buildExorcismClimaxCounterKeys,
   createExorcismPhaseRuntimeConfig,
@@ -649,7 +673,7 @@ import { createCombatRuntime } from './combatRuntime';
 import { statusListToEffects } from './combatStatusView';
 import { createDefaultEnemy, createDefaultPlayer, getEnemyPortraitUrl, savePlayerCustomAvatar } from './constants';
 import { normalizeEnemyName, resolveEnemyName } from './enemyDatabase';
-import type { Character, CombatLogEntry, Item, Skill, TurnState } from './types';
+import type { Character, CombatLogEntry, Item, Skill, SkillData, TurnState } from './types';
 import {
   applyBossMechanicEvaluation,
   evaluateBossMechanics,
@@ -737,6 +761,9 @@ const phaseTransitionEffect = ref<'phase1to2' | 'phase2to3' | 'eden-game-over' |
 // 特效状态
 const effectType = ref<'critical' | 'dodge' | 'climax' | 'victory' | 'defeat' | null>(null);
 const showEffect = ref(false);
+const companionAssistEffect = ref<{ name: string; avatarUrl: string; skillName: string } | null>(null);
+const cooperationTriggerChance = ref(0);
+let companionAssistTimer: ReturnType<typeof setTimeout> | null = null;
 
 // 玩家立绘上传 input
 const playerPortraitInput = ref<HTMLInputElement | null>(null);
@@ -1074,6 +1101,50 @@ function getExorcismRelationships(): Record<string, number> {
     }
   });
   return result;
+}
+
+function isCurrentEnemyName(statData: Record<string, any>, companionName: string, resolvedCompanionName: string): boolean {
+  const rawEnemyNames = [enemy.value.name, String(_.get(statData, '性斗系统.对手名称', '') || '')].filter(Boolean);
+
+  return rawEnemyNames.some(rawEnemyName => {
+    const resolvedEnemyName = resolveEnemyName(rawEnemyName);
+    if (
+      rawEnemyName === companionName ||
+      rawEnemyName === resolvedCompanionName ||
+      resolvedEnemyName === resolvedCompanionName
+    ) {
+      return true;
+    }
+
+    return resolvedCompanionName.length >= 2 && rawEnemyName.includes(resolvedCompanionName);
+  });
+}
+
+async function getCooperationCompanions(statData: Record<string, any>): Promise<CooperationCompanion[]> {
+  const { enemySkillDbModule } = await loadDatabaseModules();
+  const companions: CooperationCompanion[] = [];
+
+  getPresentCompanionNames(statData).forEach(companionName => {
+    const resolvedName = resolveEnemyName(companionName);
+    if (isCurrentEnemyName(statData, companionName, resolvedName)) {
+      return;
+    }
+
+    const skillDataList = (enemySkillDbModule.getEnemySkills(companionName, resolvedName) || []) as SkillData[];
+    const companion = createCooperationCompanion({
+      name: companionName,
+      skillDataList,
+      playerLevel: player.value.stats.level,
+      maxClimaxCount: player.value.stats.maxClimaxCount,
+      getAvatarUrl: getEnemyPortraitUrl,
+    });
+
+    if (companion) {
+      companions.push(companion);
+    }
+  });
+
+  return companions;
 }
 
 function getCurrentExorcismSkillTagMultiplier(skill: Skill | null | undefined): number {
@@ -2164,6 +2235,68 @@ async function applyCombatSkillEffects(skillId: string, isPlayerSkill: boolean):
   return logs;
 }
 
+async function applyCompanionSkillEffects(skill: Skill): Promise<string[]> {
+  const logs: string[] = [];
+  if (!skill.data) return logs;
+
+  const { enemySkillDbModule } = await loadDatabaseModules();
+  const runtimeSkill = enemySkillDbModule.convertToMvuSkillFormat(skill.data);
+  const effectList = (_.get(runtimeSkill, '伤害与效果.效果列表', {}) || {}) as Record<string, any>;
+  if (Object.keys(effectList).length === 0) return logs;
+
+  let enemyStatusChanged = false;
+
+  for (const [effectName, effectData] of Object.entries(effectList)) {
+    const resolvedEffect = resolveSkillEffect(effectData);
+    if (resolvedEffect.kind === 'skip') continue;
+
+    if (!resolvedEffect.targetEnemy) {
+      continue;
+    }
+
+    if (resolvedEffect.kind === 'bind') {
+      if (BossSystem.bossState.isBossFight && BossSystem.bossState.bossId === 'muxinlan') {
+        const immuneDialogue = BossSystem.getBindImmuneDialogue(BossSystem.bossState.currentPhase);
+        if (immuneDialogue) {
+          BossSystem.queueDialogues([immuneDialogue]);
+        }
+        logs.push(`${enemy.value.name} 免疫了协同束缚效果！`);
+        continue;
+      }
+
+      let finalDuration = resolvedEffect.duration;
+      if (enemySensoryNumb.value > 0) {
+        finalDuration = 1;
+        enemySensoryNumb.value = 0;
+        logs.push(`【感官麻木】${enemy.value.name} 的束缚持续时间被减少为1回合！`);
+      }
+
+      finalDuration = Math.min(finalDuration, MAX_BIND_DURATION);
+      enemyBoundTurns.value = finalDuration;
+      enemyBindSource.value = 'player';
+      logs.push(`${enemy.value.name} 被协同束缚了 ${finalDuration} 回合，无法行动！`);
+      continue;
+    }
+
+    const statusKey = `协同_${getSkillStatusKey(resolvedEffect.effectType, skill.id, effectName)}`;
+    const currentStatusList = { ...(enemyRuntimeStatuses.value as Record<string, any>) };
+    const result = upsertSkillStatus(currentStatusList, statusKey, {
+      加成: resolvedEffect.bonus,
+      剩余回合: resolvedEffect.duration,
+    });
+
+    enemyRuntimeStatuses.value = result.statusList;
+    enemyStatusChanged = true;
+    logs.push(buildSkillStatusLog(enemy.value.name, resolvedEffect, result.refreshed));
+  }
+
+  if (enemyStatusChanged) {
+    await updateEnemyRealtimeStats();
+  }
+
+  return logs;
+}
+
 /**
  * 回合结束时更新状态效果
  * 只负责减少剩余回合数，移除过期状态
@@ -2314,6 +2447,23 @@ function triggerEffect(type: 'critical' | 'dodge' | 'climax' | 'victory' | 'defe
       effectType.value = null;
     }, 300);
   }, 1500);
+}
+
+function triggerCompanionAssistVisual(companion: CooperationCompanion, skill: Skill) {
+  if (companionAssistTimer) {
+    clearTimeout(companionAssistTimer);
+  }
+
+  companionAssistEffect.value = {
+    name: companion.character.name,
+    avatarUrl: companion.character.avatarUrl,
+    skillName: skill.name,
+  };
+
+  companionAssistTimer = setTimeout(() => {
+    companionAssistEffect.value = null;
+    companionAssistTimer = null;
+  }, 1800);
 }
 
 // 清空临时状态（战斗结束后调用）
@@ -3084,7 +3234,7 @@ function handlePlayerSkill(skill: Skill) {
         if (hasDirectDamage) {
           // 使用totalDamage而不是actualDamage（连击总伤害）
           if (result.isCritical) {
-            addLog(`暴击！总计造成 ${result.totalDamage} 点快感伤害！`, 'player', 'critical');
+            addLog(`暴击！总计造成 ${result.totalDamage} 点快感！`, 'player', 'critical');
             triggerEffect('critical');
             applyPlayerAttackActions(
               createPlayerCriticalHitActions({
@@ -3095,7 +3245,7 @@ function handlePlayerSkill(skill: Skill) {
               { nextEnemy },
             );
           } else {
-            addLog(`总计造成 ${result.totalDamage} 点快感伤害`, 'player', 'damage');
+            addLog(`总计造成 ${result.totalDamage} 点快感`, 'player', 'damage');
           }
 
           // 应用伤害（结算快感）- 使用totalDamage
@@ -3105,7 +3255,7 @@ function handlePlayerSkill(skill: Skill) {
             nextEnemy.stats.currentPleasure + result.totalDamage,
           );
           addLog(
-            `${nextEnemy.name} 的快感从 ${oldPleasure} 增加到 ${nextEnemy.stats.currentPleasure}`,
+            `${nextEnemy.name} 的快感从 ${oldPleasure}/${nextEnemy.stats.maxPleasure} 增加到 ${nextEnemy.stats.currentPleasure}/${nextEnemy.stats.maxPleasure}`,
             'system',
             'info',
           );
@@ -3429,7 +3579,7 @@ async function runEdenGameOverSequence() {
     player.value.stats.maxPleasure,
     player.value.stats.currentPleasure + gameOverDamage,
   );
-  addLog(`${player.value.name} 受到了 ${gameOverDamage} 点快感伤害！`, 'system', 'critical');
+  addLog(`${player.value.name} 受到了 ${gameOverDamage} 点快感！`, 'system', 'critical');
 
   setTimeout(() => {
     phaseTransitionEffect.value = '';
@@ -3725,6 +3875,80 @@ async function handleEnemyTurn() {
   }, 1000);
 }
 
+async function tryRunCompanionCooperationAtTurnStart(): Promise<boolean> {
+  if (isBattleFlowLocked()) {
+    return true;
+  }
+
+  const statData = await readCombatStatData(data => data as Record<string, any>);
+  if (statData) {
+    currentCombatStatData = statData;
+  }
+
+  if (!statData || !hasActiveExorcismMazeSideQuest(statData)) {
+    cooperationTriggerChance.value = 0;
+    return false;
+  }
+
+  const companions = await getCooperationCompanions(statData);
+  if (companions.length === 0) {
+    cooperationTriggerChance.value = 0;
+    return false;
+  }
+
+  const rollResult = createCooperationRoll(cooperationTriggerChance.value);
+  cooperationTriggerChance.value = rollResult.nextChance;
+  if (!rollResult.triggered) {
+    const message =
+      rollResult.roll === null
+        ? `【协同作战】${companions.map(companion => companion.resolvedName).join('、')}进入协同状态，触发率提升至 ${COOPERATION_CHANCE_STEP}%`
+        : `【协同作战】本回合未触发，触发率提升至 ${rollResult.nextChance}%`;
+    addLog(message, 'system', 'info');
+    return false;
+  }
+
+  const action = pickCooperationAction(companions);
+  if (!action) {
+    return false;
+  }
+
+  cooperationTriggerChance.value = 0;
+  triggerCompanionAssistVisual(action.companion, action.skill);
+
+  try {
+    const nextEnemy = cloneCharacter(enemy.value);
+    const attackResolution = resolveCompanionSkillAttack({
+      companion: action.companion.character,
+      target: nextEnemy,
+      skill: action.skill,
+    });
+
+    attackResolution.logs.forEach(log => addLog(log.message, log.source, log.type));
+    if (attackResolution.effect) {
+      triggerEffect(attackResolution.effect);
+    }
+
+    enemy.value = nextEnemy;
+
+    if (attackResolution.shouldApplySkillEffects) {
+      const effectLogs = await applyCompanionSkillEffects(action.skill);
+      effectLogs.forEach(log => addLog(log, 'system', 'info'));
+    }
+
+    addLog('【协同作战】触发率回落至 0%', 'system', 'info');
+
+    if (enemy.value.stats.currentPleasure >= enemy.value.stats.maxPleasure && turnState.climaxTarget === null) {
+      await triggerClimaxProcessing({ characterName: enemy.value.name, targetIsEnemy: true, reason: '协同作战' });
+      return true;
+    }
+  } catch (error) {
+    console.error('[战斗界面] 协同作战执行失败', error);
+    addLog('协同作战执行失败', 'system', 'critical');
+  }
+
+  return isBattleFlowLocked();
+}
+
 async function startNewTurn() {
   if (isBattleFlowLocked()) {
     return;
@@ -3746,6 +3970,10 @@ async function startNewTurn() {
     exorcismTurnLimit.triggeredBadEnd ||
     exorcismTurnLimit.skipBattle
   ) {
+    return;
+  }
+
+  if (await tryRunCompanionCooperationAtTurnStart()) {
     return;
   }
 
@@ -4686,7 +4914,7 @@ async function handleSelfPleasure() {
   player.value.stats.currentPleasure = after;
 
   addLog(
-    `${player.value.name} 选择了在对手前自慰，快感从 ${before} 上升到 ${after}（+${increase}）。`,
+    `${player.value.name} 选择了在对手前自慰，快感从 ${before}/${player.value.stats.maxPleasure} 上升到 ${after}/${player.value.stats.maxPleasure}（+${increase}）。`,
     'system',
     'info',
   );
@@ -4818,6 +5046,10 @@ onMounted(async () => {
     exorcismCompanionMissing.skipBattle ||
     exorcismCompanionMissing.triggeredBadEnd
   ) {
+    return;
+  }
+
+  if (await tryRunCompanionCooperationAtTurnStart()) {
     return;
   }
 
@@ -6201,6 +6433,139 @@ function getSinTalentDisplayName(sinType: string): string {
   pointer-events: none !important;
   cursor: not-allowed !important;
   transition: filter 0.5s ease;
+}
+
+// ========== 协同作战立绘特效 ==========
+.companion-assist-effect {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 88;
+  overflow: hidden;
+}
+
+.companion-assist-strike {
+  position: absolute;
+  top: 22%;
+  right: 7%;
+  width: min(44vw, 520px);
+  height: min(44vw, 520px);
+  border: 2px solid rgba(125, 211, 252, 0.75);
+  border-radius: 50%;
+  box-shadow:
+    0 0 24px rgba(125, 211, 252, 0.55),
+    inset 0 0 36px rgba(251, 191, 36, 0.22);
+  animation: companionStrike 1.8s ease-out forwards;
+}
+
+.companion-assist-portrait {
+  position: absolute;
+  right: 8%;
+  bottom: 12%;
+  width: min(36vw, 320px);
+  max-height: 76vh;
+  object-fit: contain;
+  filter: drop-shadow(0 0 28px rgba(125, 211, 252, 0.65)) drop-shadow(0 10px 32px rgba(0, 0, 0, 0.75));
+  animation: companionPortraitIn 1.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.companion-assist-caption {
+  position: absolute;
+  right: clamp(20px, 9vw, 140px);
+  bottom: 9%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85);
+  animation: companionCaptionIn 1.8s ease-out forwards;
+}
+
+.companion-name {
+  font-size: clamp(22px, 4vw, 44px);
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.companion-skill {
+  font-size: clamp(13px, 2vw, 18px);
+  color: #fde68a;
+}
+
+@media (max-width: 768px) {
+  .companion-assist-strike {
+    top: 26%;
+    right: -16%;
+    width: 78vw;
+    height: 78vw;
+  }
+
+  .companion-assist-portrait {
+    right: -4%;
+    bottom: 18%;
+    width: min(58vw, 240px);
+    max-height: 58vh;
+  }
+
+  .companion-assist-caption {
+    right: 18px;
+    bottom: 14%;
+  }
+}
+
+@keyframes companionStrike {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) rotate(-16deg);
+  }
+  22% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+  68% {
+    opacity: 0.85;
+    transform: scale(1.08) rotate(8deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.35) rotate(18deg);
+  }
+}
+
+@keyframes companionPortraitIn {
+  0% {
+    opacity: 0;
+    transform: translateX(34%) scale(0.9);
+  }
+  18% {
+    opacity: 1;
+    transform: translateX(0) scale(1.04);
+  }
+  72% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(18%) scale(0.96);
+  }
+}
+
+@keyframes companionCaptionIn {
+  0%,
+  10% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  26%,
+  70% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
 }
 
 // ========== BOSS阶段转换特效 ==========
