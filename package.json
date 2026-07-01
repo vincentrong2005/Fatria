@@ -83,9 +83,15 @@
     "@vueuse/integrations": "^13.9.0",
     "@vueuse/shared": "^13.9.0",
     "async-wait-until": "^2.0.31",
+<<<<<<< HEAD
     "compare-versions": "^6.1.1",
     "dedent": "^1.7.2",
     "fflate": "^0.8.3",
+=======
+    "axios": "1.14.0",
+    "compare-versions": "^6.1.1",
+    "dedent": "^1.7.2",
+>>>>>>> 92bc9ed4a5ff1e65a494b9644780983031cdb1df
     "gsap": "^3.15.0",
     "jquery": "^3.7.1",
     "jqueryui": "^1.11.1",
@@ -93,7 +99,10 @@
     "jsonrepair": "^3.14.1",
     "klona": "^2.0.6",
     "lodash": "^4.18.1",
+<<<<<<< HEAD
     "lucide-react": "^0.563.0",
+=======
+>>>>>>> 92bc9ed4a5ff1e65a494b9644780983031cdb1df
     "pinia": "^3.0.4",
     "pixi.js": "^8.19.0",
     "react": "^19.2.7",
