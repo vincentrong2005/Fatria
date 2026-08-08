@@ -507,6 +507,10 @@ export function resolveEnemySkillAttack(params: {
   );
 
   beforeDialogueEvents.push(createLogEvent(`${params.enemy.name} 使用了 ${params.skill.name}！`, 'enemy', 'info'));
+  const voiceLine = params.skill.data.voiceLine?.trim();
+  if (voiceLine) {
+    beforeDialogueEvents.push(createLogEvent(`「${voiceLine}」`, 'enemy', 'info'));
+  }
 
   if (result.isDodged) {
     afterDialogueEvents.push(createLogEvent(`${params.player.name} 闪避了所有攻击！`, 'system', 'info'));

@@ -30,6 +30,10 @@ export interface BossRuntimeSetup {
   actions: BossSetupAction[];
 }
 
+const CHARACTER_CLIMAX_LIMITS: Record<string, number> = {
+  户田山泉子: 1,
+};
+
 export function getPlayerGenderFromData(data: any, fallback: PlayerBinaryGender = '女'): PlayerBinaryGender {
   const rawGender = String(data?.角色基础?.性别 ?? fallback);
   return rawGender === '男' ? '男' : '女';
@@ -47,7 +51,7 @@ export function createBossRuntimeSetup(params: {
   let dataName = params.resolveEnemyName(params.enemyName);
   let skillPoolName: string | undefined;
   let avatarUrl = params.getEnemyPortraitUrl(dataName);
-  let climaxLimit = params.defaultClimaxLimit;
+  let climaxLimit = CHARACTER_CLIMAX_LIMITS[dataName] ?? params.defaultClimaxLimit;
 
   if (BossSystem.isMuxinlanBoss(params.enemyName)) {
     BossSystem.initMuxinlanBoss();
