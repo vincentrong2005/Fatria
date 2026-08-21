@@ -9,10 +9,7 @@ import {
   type NovelAiImageSettings,
 } from './novelAiImageSettings';
 import { phoneApiManager } from './phoneApiManager';
-import {
-  loadBackstreetGenerationSettings,
-  renderBackstreetPromptTemplate,
-} from './backstreetGenerationSettings';
+import { loadBackstreetGenerationSettings, renderBackstreetPromptTemplate } from './backstreetGenerationSettings';
 import { phoneLoreContextBuilder } from './phoneLoreContext';
 import type {
   BackstreetContact,
@@ -23,7 +20,7 @@ import type {
 } from './types';
 import { getLatestStatData } from '../../shared/mvuStore';
 import { deleteIndexedImage, getIndexedImageBlob, isIndexedImageRef } from '../../shared/indexedImageStore';
-import { clipText, makeId, normalizeName, safeString, uniqueStrings } from './text';
+import { clipText, formatTimestampedLines, makeId, normalizeName, safeString, uniqueStrings } from './text';
 import { extractXmlTag, normalizePhoneMemoryQuery, parseJsonBlock } from './xmlToolCall';
 
 interface SendBackstreetResult {
@@ -94,7 +91,12 @@ function isImageMessage(message: Partial<BackstreetMessage>): boolean {
 }
 
 function isPromptVisibleUserImageMessage(message: Partial<BackstreetMessage>): boolean {
-  return message.sender === 'user' && isImageMessage(message) && Boolean(safeString(message.imageRef)) && !message.imageHiddenFromPrompt;
+  return (
+    message.sender === 'user' &&
+    isImageMessage(message) &&
+    Boolean(safeString(message.imageRef)) &&
+    !message.imageHiddenFromPrompt
+  );
 }
 
 function shouldIncludeMessageInPrompt(message: Partial<BackstreetMessage>): boolean {
@@ -134,16 +136,15 @@ function formatThreadMessagesForPrompt(
   maxItems = 30,
   options: { inlineImageRefs?: Set<string> } = {},
 ): string {
-  return messages
-    .filter(shouldIncludeMessageInPrompt)
-    .slice(-maxItems)
-    .map(message => {
-      const timestamp = [message.date, message.time || '--:--'].filter(Boolean).join(' ');
-      return `[${timestamp || '--:--'}] ${getMessageSpeaker(message, thread)}: ${formatMessageTextForPrompt(message, {
+  const promptMessages = messages.filter(shouldIncludeMessageInPrompt).slice(-maxItems);
+  return formatTimestampedLines(
+    promptMessages,
+    message => formatMessageTimestamp(message),
+    message =>
+      `${getMessageSpeaker(message, thread)}: ${formatMessageTextForPrompt(message, {
         inlineImageAttached: isMessageInlineAttached(message, options.inlineImageRefs),
-      })}`;
-    })
-    .join('\n');
+      })}`,
+  );
 }
 
 function extractFallbackQuery(text: string, limit = 6): PhoneMemoryQuery {
@@ -237,19 +238,19 @@ function isSameCharacter(left: string, right: string): boolean {
   const normalizedRight = normalizeCharacterName(right);
   return Boolean(
     normalizedLeft &&
-      normalizedRight &&
-      (normalizedLeft === normalizedRight || normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft)),
+    normalizedRight &&
+    (normalizedLeft === normalizedRight ||
+      normalizedLeft.includes(normalizedRight) ||
+      normalizedRight.includes(normalizedLeft)),
   );
 }
 
 function getPresentNames(statData: Record<string, any> | null): string[] {
   const value = statData?.关系系统?.在场人物;
-  const names = Array.isArray(value)
-    ? value
-    : typeof value === 'string'
-      ? value.split(/[、,，|/\s]+/)
-      : [];
-  return uniqueStrings(names.map(name => safeString(name)).filter(name => name && !['无', '暂无', '未知'].includes(name)));
+  const names = Array.isArray(value) ? value : typeof value === 'string' ? value.split(/[、,，|/\s]+/) : [];
+  return uniqueStrings(
+    names.map(name => safeString(name)).filter(name => name && !['无', '暂无', '未知'].includes(name)),
+  );
 }
 
 function getThreadParticipantMatches(thread: BackstreetThreadData, presentNames: string[]): string[] {
@@ -269,14 +270,18 @@ function getMessageSortTime(message: BackstreetMessage): number {
   return Number(message.createdAt || 0);
 }
 
-function formatRawMessageLine(thread: BackstreetThreadData, message: BackstreetMessage, includeThreadName = false): string {
+function formatRawMessageContentLine(
+  thread: BackstreetThreadData,
+  message: BackstreetMessage,
+  includeThreadName = false,
+): string {
   const threadLabel = includeThreadName
     ? thread.kind === 'group'
       ? `群聊「${getDisplayName(thread)}」`
       : `私聊「${getDisplayName(thread)}」`
     : '';
   const label = threadLabel ? `${threadLabel} ` : '';
-  return `[${formatMessageTimestamp(message)}] ${label}${getMessageSpeaker(message, thread)}：${formatMessageTextForPrompt(message)}`;
+  return `${label}${getMessageSpeaker(message, thread)}：${formatMessageTextForPrompt(message)}`;
 }
 
 function formatThreadBlock(thread: BackstreetThreadData, messages: BackstreetMessage[], extra = ''): string {
@@ -284,7 +289,11 @@ function formatThreadBlock(thread: BackstreetThreadData, messages: BackstreetMes
     thread.kind === 'group'
       ? `【群聊：${getDisplayName(thread)}｜成员：${(thread.members || []).join('、') || '未知'}${thread.dissolved ? '｜已解散' : ''}${extra ? `｜${extra}` : ''}】`
       : `【私聊：${getDisplayName(thread)}${extra ? `｜${extra}` : ''}】`;
-  return `${title}\n${messages.map(message => formatRawMessageLine(thread, message)).join('\n')}`;
+  return `${title}\n${formatTimestampedLines(
+    messages,
+    message => formatMessageTimestamp(message),
+    message => formatRawMessageContentLine(thread, message),
+  )}`;
 }
 
 function buildFixedMainInjection(
@@ -317,7 +326,9 @@ function buildFixedMainInjection(
       .filter(item => item.matches.length > 0)
       .map(item => {
         const messages = getRoleplayMessages(item.thread).slice(-settings.presentGroupLimit);
-        return messages.length > 0 ? formatThreadBlock(item.thread, messages, `涉及在场：${item.matches.join('、')}`) : '';
+        return messages.length > 0
+          ? formatThreadBlock(item.thread, messages, `涉及在场：${item.matches.join('、')}`)
+          : '';
       })
       .filter(Boolean);
     if (groupBlocks.length > 0) {
@@ -327,15 +338,19 @@ function buildFixedMainInjection(
 
   if (settings.globalRecentLimit > 0) {
     const globalMessages = threads
-      .flatMap(thread => getRoleplayMessages(thread).map(message => ({ thread, message } satisfies BackstreetMessageContext)))
+      .flatMap(thread =>
+        getRoleplayMessages(thread).map(message => ({ thread, message }) satisfies BackstreetMessageContext),
+      )
       .sort((left, right) => getMessageSortTime(right.message) - getMessageSortTime(left.message))
       .slice(0, settings.globalRecentLimit)
       .reverse();
     if (globalMessages.length > 0) {
       sections.push(
-        `【全局最近 ${settings.globalRecentLimit} 条后街记录｜不要求相关角色在场】\n${globalMessages
-          .map(item => formatRawMessageLine(item.thread, item.message, true))
-          .join('\n')}`,
+        `【全局最近 ${settings.globalRecentLimit} 条后街记录｜不要求相关角色在场】\n${formatTimestampedLines(
+          globalMessages,
+          item => formatMessageTimestamp(item.message),
+          item => formatRawMessageContentLine(item.thread, item.message, true),
+        )}`,
       );
     }
   }
@@ -408,7 +423,10 @@ function validateBackstreetReply(
     if (/<\/?(?:backstreet|phone_memory_query|backstreet_memory_update|main_task|content)\b/i.test(text)) {
       return '消息内混入控制标签';
     }
-    if (normalizedAllowedSpeakers.length > 0 && !normalizedAllowedSpeakers.includes(normalizeName(safeString(reply.speaker)))) {
+    if (
+      normalizedAllowedSpeakers.length > 0 &&
+      !normalizedAllowedSpeakers.includes(normalizeName(safeString(reply.speaker)))
+    ) {
       return '群聊消息缺少有效发言人';
     }
   }
@@ -419,7 +437,10 @@ function validateBackstreetReply(
     if (/<\/?(?:backstreet|phone_memory_query|backstreet_memory_update|main_task|content)\b/i.test(prompt)) {
       return '插图提示词内混入控制标签';
     }
-    if (normalizedAllowedSpeakers.length > 0 && !normalizedAllowedSpeakers.includes(normalizeName(safeString(reply.speaker)))) {
+    if (
+      normalizedAllowedSpeakers.length > 0 &&
+      !normalizedAllowedSpeakers.includes(normalizeName(safeString(reply.speaker)))
+    ) {
       return '群聊插图缺少有效发言人';
     }
   }
@@ -427,12 +448,20 @@ function validateBackstreetReply(
   return '';
 }
 
-function buildBackstreetRepairPrompt(contact: string, reason: string, allowedSpeakers: string[] = [], allowImage = false): string {
+function buildBackstreetRepairPrompt(
+  contact: string,
+  reason: string,
+  allowedSpeakers: string[] = [],
+  allowImage = false,
+): string {
   const speakerRule =
     allowedSpeakers.length > 0
       ? `每条消息必须包含 "speaker"，且 speaker 只能从这些群成员中选择：${allowedSpeakers.join('、')}。`
       : '';
-  const textSample = allowedSpeakers.length > 0 ? `{"speaker":"${allowedSpeakers[0]}","type":"text","text":"消息内容"}` : '{"type":"text","text":"消息内容"}';
+  const textSample =
+    allowedSpeakers.length > 0
+      ? `{"speaker":"${allowedSpeakers[0]}","type":"text","text":"消息内容"}`
+      : '{"type":"text","text":"消息内容"}';
   const imageSample =
     allowedSpeakers.length > 0
       ? `{"speaker":"${allowedSpeakers[0]}","type":"image","text":"图片附言","prompt":"English NovelAI tags, comma-separated"}`
@@ -455,7 +484,9 @@ ${imageRule}
 </backstreet>`;
 }
 
-function buildBackstreetOutputSchema(options: { allowImage: boolean; sampleSpeaker?: string } = { allowImage: false }): string {
+function buildBackstreetOutputSchema(
+  options: { allowImage: boolean; sampleSpeaker?: string } = { allowImage: false },
+): string {
   const speaker = safeString(options.sampleSpeaker);
   const textSample = speaker
     ? `{"speaker":"${speaker}","type":"text","text":"消息内容"}`
@@ -523,7 +554,9 @@ async function requestBackstreetReplyWithRecovery(
       const invalidReason = validateBackstreetReply(result.text, parsedReplies, options);
       if (!invalidReason) {
         const textReplies = parsedReplies.filter(reply => reply.type === 'text' && safeString(reply.text)).slice(0, 4);
-        const imageReplies = parsedReplies.filter(reply => reply.type === 'image' && safeString(reply.prompt)).slice(0, 1);
+        const imageReplies = parsedReplies
+          .filter(reply => reply.type === 'image' && safeString(reply.prompt))
+          .slice(0, 1);
         return [...textReplies, ...imageReplies];
       }
 
@@ -575,7 +608,9 @@ async function buildInlineImageFile(message: BackstreetMessage): Promise<File | 
   return new File([blob], `${message.id || 'backstreet-image'}.${extension}`, { type });
 }
 
-async function buildInlineImagesForPrompt(messages: BackstreetMessage[]): Promise<{ images: (File | string)[]; refs: Set<string> }> {
+async function buildInlineImagesForPrompt(
+  messages: BackstreetMessage[],
+): Promise<{ images: (File | string)[]; refs: Set<string> }> {
   const generationSettings = loadBackstreetGenerationSettings();
   const promptImageMessages =
     generationSettings.maxUserImagesInPrompt > 0
@@ -595,7 +630,9 @@ async function buildInlineImagesForPrompt(messages: BackstreetMessage[]): Promis
 }
 
 function normalizeAppendImageRefs(options: AppendUserMessageOptions): string[] {
-  const refs = uniqueStrings([...(Array.isArray(options.imageRefs) ? options.imageRefs : []), options.imageRef].filter(Boolean));
+  const refs = uniqueStrings(
+    [...(Array.isArray(options.imageRefs) ? options.imageRefs : []), options.imageRef].filter(Boolean),
+  );
   const generationSettings = loadBackstreetGenerationSettings();
   if (refs.length > generationSettings.maxUserImagesPerSend) {
     throw new Error(`单次最多只能发送 ${generationSettings.maxUserImagesPerSend} 张图片`);
@@ -603,7 +640,11 @@ function normalizeAppendImageRefs(options: AppendUserMessageOptions): string[] {
   return refs;
 }
 
-function buildGroupMemberPrivateHistory(threads: BackstreetThreadData[], members: string[], messageLimit: number): string {
+function buildGroupMemberPrivateHistory(
+  threads: BackstreetThreadData[],
+  members: string[],
+  messageLimit: number,
+): string {
   if (messageLimit <= 0) return '';
   const memberNames = normalizeList(members, 24);
   if (memberNames.length === 0) return '';
@@ -731,7 +772,10 @@ function logNovelAiIllustrationState(thread: BackstreetThreadData, state: NovelA
 }
 
 export class BackstreetService {
-  private async enforceUserImagePromptLimit(contact: string, thread: BackstreetThreadData): Promise<BackstreetThreadData> {
+  private async enforceUserImagePromptLimit(
+    contact: string,
+    thread: BackstreetThreadData,
+  ): Promise<BackstreetThreadData> {
     const visibleImages = getPromptVisibleUserImageMessages(thread.messages);
     const generationSettings = loadBackstreetGenerationSettings();
     const overflowCount = visibleImages.length - generationSettings.maxUserImagesInPrompt;
@@ -781,7 +825,11 @@ export class BackstreetService {
   }
 
   async dissolveGroup(contact: string, characterData: any): Promise<BackstreetMessage[]> {
-    const thread = await backstreetWorldbookStore.dissolveGroup(contact, getCurrentDate(characterData), getCurrentTime(characterData));
+    const thread = await backstreetWorldbookStore.dissolveGroup(
+      contact,
+      getCurrentDate(characterData),
+      getCurrentTime(characterData),
+    );
     return thread.messages;
   }
 
@@ -790,7 +838,12 @@ export class BackstreetService {
     return thread.messages;
   }
 
-  async appendUserMessage(contact: string, text: string, characterData: any, options: AppendUserMessageOptions = {}): Promise<BackstreetMessage> {
+  async appendUserMessage(
+    contact: string,
+    text: string,
+    characterData: any,
+    options: AppendUserMessageOptions = {},
+  ): Promise<BackstreetMessage> {
     const thread = await backstreetWorldbookStore.getThread(contact);
     if (thread.kind === 'group' && thread.dissolved) throw new Error('群聊已解散，不能继续发送消息');
     const currentDate = getCurrentDate(characterData);
@@ -934,7 +987,9 @@ export class BackstreetService {
     const messages: BackstreetMessage[] = [];
     for (const reply of parsedReplies) {
       const createdAt = Date.now() + messages.length;
-      const speaker = options.members?.length ? this.normalizeGroupSpeaker(reply.speaker || '', options.members) : undefined;
+      const speaker = options.members?.length
+        ? this.normalizeGroupSpeaker(reply.speaker || '', options.members)
+        : undefined;
 
       if (reply.type === 'image') {
         try {
@@ -1001,7 +1056,10 @@ export class BackstreetService {
         })
       : '';
     const locationText = `${safeString(characterData?.位置系统?.地点名称)} ${safeString(characterData?.位置系统?.坐标)}`;
-    const keywordQuery = extractFallbackQuery(`${groupName}\n${members.join('\n')}\n${latestUserMessage}\n${locationText}`, 6);
+    const keywordQuery = extractFallbackQuery(
+      `${groupName}\n${members.join('\n')}\n${latestUserMessage}\n${locationText}`,
+      6,
+    );
     const query = normalizePhoneMemoryQuery({
       characters: members,
       keywords: uniqueStrings([groupName, ...members, ...keywordQuery.keywords]),
@@ -1094,7 +1152,11 @@ ${latestUserMessage}
     });
   }
 
-  private async generateReply(contact: string, messages: BackstreetMessage[], characterData: any): Promise<BackstreetMessage[]> {
+  private async generateReply(
+    contact: string,
+    messages: BackstreetMessage[],
+    characterData: any,
+  ): Promise<BackstreetMessage[]> {
     const contactName = getPrivatePromptName(contact);
     const generationSettings = loadBackstreetGenerationSettings();
     const latestUserMessageObject = messages.filter(message => message.sender === 'user').at(-1);
@@ -1136,12 +1198,23 @@ ${latestUserMessage}
       updatedAt: Date.now(),
       messages,
     };
-    const historyMessages = messages.filter(message => message.sender !== 'system' && shouldIncludeMessageInPrompt(message));
-    const historyText = formatThreadMessagesForPrompt(threadForIllustration, historyMessages, generationSettings.privateHistoryCount, {
-      inlineImageRefs: userImagePromptState.refs,
-    });
+    const historyMessages = messages.filter(
+      message => message.sender !== 'system' && shouldIncludeMessageInPrompt(message),
+    );
+    const historyText = formatThreadMessagesForPrompt(
+      threadForIllustration,
+      historyMessages,
+      generationSettings.privateHistoryCount,
+      {
+        inlineImageRefs: userImagePromptState.refs,
+      },
+    );
     const novelAiImageSettings = loadNovelAiImageSettings();
-    const illustrationState = buildIllustrationStateForThread(threadForIllustration, characterData, novelAiImageSettings);
+    const illustrationState = buildIllustrationStateForThread(
+      threadForIllustration,
+      characterData,
+      novelAiImageSettings,
+    );
     logNovelAiIllustrationState(threadForIllustration, illustrationState);
     const outputSchema = buildBackstreetOutputSchema({ allowImage: illustrationState.allowImage });
 
@@ -1190,7 +1263,6 @@ ${latestUserMessage}
       fallbackTime,
     });
   }
-
 }
 
 export const backstreetService = new BackstreetService();

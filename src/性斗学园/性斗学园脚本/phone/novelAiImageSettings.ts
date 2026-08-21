@@ -46,6 +46,8 @@ export const NOVELAI_IMAGE_SIZE_OPTIONS: NovelAiImageSizeOption[] = [
 export const NOVELAI_IMAGE_MODEL_OPTIONS = [
   'nai-diffusion-4-5-curated',
   'nai-diffusion-4-5-full',
+  'nai-diffusion-5-curated',
+  'nai-diffusion-5-full',
 ];
 
 const LEGACY_POSITIVE_PROMPT_PREFIX = 'best quality, amazing quality, very aesthetic, anime style, detailed,';
@@ -137,12 +139,16 @@ function normalizePromptTemplate(value: unknown): string {
   if (!text) return DEFAULT_NOVELAI_IMAGE_SETTINGS.promptTemplate;
   const looksLikeLegacyDefault =
     text.includes('本轮允许你在适当时机为后街聊天附加 1 张插图提示词。') &&
-    text.includes('Describe adult character(s), appearance, pose, expression, clothes, lighting, background, camera angle.');
+    text.includes(
+      'Describe adult character(s), appearance, pose, expression, clothes, lighting, background, camera angle.',
+    );
   return looksLikeLegacyDefault ? DEFAULT_NOVELAI_IMAGE_SETTINGS.promptTemplate : text;
 }
 
 function normalizeSettings(settings: Partial<NovelAiImageSettings> | null | undefined): NovelAiImageSettings {
-  const sizePreset = isSizePreset(settings?.sizePreset) ? settings.sizePreset : DEFAULT_NOVELAI_IMAGE_SETTINGS.sizePreset;
+  const sizePreset = isSizePreset(settings?.sizePreset)
+    ? settings.sizePreset
+    : DEFAULT_NOVELAI_IMAGE_SETTINGS.sizePreset;
   const model = safeString(settings?.model);
   return {
     enabled: Boolean(settings?.enabled),
@@ -207,7 +213,9 @@ export function saveNovelAiImageSettings(settings: NovelAiImageSettings): void {
 }
 
 export function getNovelAiImageSize(settings = loadNovelAiImageSettings()): NovelAiImageSizeOption {
-  return NOVELAI_IMAGE_SIZE_OPTIONS.find(option => option.value === settings.sizePreset) || NOVELAI_IMAGE_SIZE_OPTIONS[0];
+  return (
+    NOVELAI_IMAGE_SIZE_OPTIONS.find(option => option.value === settings.sizePreset) || NOVELAI_IMAGE_SIZE_OPTIONS[0]
+  );
 }
 
 export function isNovelAiImageReady(settings = loadNovelAiImageSettings()): boolean {
@@ -244,7 +252,10 @@ export function buildNovelAiIllustrationInstruction(
     mode: context.isGroup ? 'group' : 'private',
   };
 
-  return safeString(settings.promptTemplate).replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key: string) => replacements[key] ?? '');
+  return safeString(settings.promptTemplate).replace(
+    /\{\{\s*(\w+)\s*\}\}/g,
+    (_, key: string) => replacements[key] ?? '',
+  );
 }
 
 function uniqueJoin(values: string[], separator: string): string {

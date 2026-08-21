@@ -149,8 +149,8 @@ async function fetchGeneratedImageUrl(
   };
 }
 
-function isV4ImageModel(model: string): boolean {
-  return /^nai-diffusion-4/i.test(safeString(model));
+function usesV4PromptFormat(model: string): boolean {
+  return /^nai-diffusion-(?:4|5)(?:-|$)/i.test(safeString(model));
 }
 
 function buildV4Prompt(prompt: string, legacyUc = false) {
@@ -190,7 +190,7 @@ function buildNovelAiGenerationBody(
     uc: negativePrompt,
     image_format: 'png',
     qualityToggle: true,
-    params_version: isV4ImageModel(model) ? 3 : 1,
+    params_version: usesV4PromptFormat(model) ? 3 : 1,
     dynamic_thresholding: false,
     sm: false,
     sm_dyn: false,
@@ -199,7 +199,7 @@ function buildNovelAiGenerationBody(
     legacy_v3_extend: false,
   };
 
-  if (isV4ImageModel(model)) {
+  if (usesV4PromptFormat(model)) {
     parameters.v4_prompt = buildV4Prompt(prompt);
     parameters.v4_negative_prompt = buildV4Prompt(negativePrompt, false);
   }
@@ -232,7 +232,11 @@ export async function testNovelAiImageConnection(settingsOverride?: NovelAiImage
   }
 
   const payload = await response.json().catch(() => null);
-  const suggestions = Array.isArray(payload?.tags) ? payload.tags : Array.isArray(payload?.suggestions) ? payload.suggestions : [];
+  const suggestions = Array.isArray(payload?.tags)
+    ? payload.tags
+    : Array.isArray(payload?.suggestions)
+      ? payload.suggestions
+      : [];
   return `连接成功：${status.settings.model} @ ${normalizeNovelAiImageApiBaseUrl(status.settings.apiBaseUrl)}${
     suggestions.length ? `，标签建议 ${suggestions.length} 条` : ''
   }`;
@@ -247,7 +251,8 @@ export async function generateNovelAiImage(
   const status = getNovelAiImageStatus(settings);
   if (!status.ready) throw new Error(status.reason);
 
-  const prompt = options.applyPrefix === false ? safeString(rawPrompt) : buildNovelAiPositivePrompt(rawPrompt, status.settings);
+  const prompt =
+    options.applyPrefix === false ? safeString(rawPrompt) : buildNovelAiPositivePrompt(rawPrompt, status.settings);
   if (!prompt) throw new Error('NovelAI 生图提示词为空');
 
   const size = getNovelAiImageSize(status.settings);

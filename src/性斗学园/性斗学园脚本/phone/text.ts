@@ -61,16 +61,36 @@ export function getMessageText(message: unknown): string {
   return '';
 }
 
+export function formatTimestampedLines<T>(
+  items: T[],
+  getTimestamp: (item: T) => string,
+  formatLine: (item: T) => string,
+): string {
+  const lines: string[] = [];
+  let previousTimestamp = '';
+
+  for (const item of items) {
+    const timestamp = safeString(getTimestamp(item)) || '--:--';
+    if (timestamp !== previousTimestamp) {
+      lines.push(`[${timestamp}]`);
+      previousTimestamp = timestamp;
+    }
+    lines.push(formatLine(item));
+  }
+
+  return lines.join('\n');
+}
+
 export function formatMessagesForPrompt(
   messages: { sender: string; date?: string; time: string; text: string }[],
   maxItems = 30,
 ): string {
-  return messages
-    .slice(-maxItems)
-    .map(message => {
+  return formatTimestampedLines(
+    messages.slice(-maxItems),
+    message => [message.date, message.time || '--:--'].filter(Boolean).join(' '),
+    message => {
       const speaker = message.sender === 'user' ? '<user>' : message.sender === 'contact' ? '对方' : '系统';
-      const timestamp = [message.date, message.time || '--:--'].filter(Boolean).join(' ');
-      return `[${timestamp || '--:--'}] ${speaker}: ${message.text}`;
-    })
-    .join('\n');
+      return `${speaker}: ${message.text}`;
+    },
+  );
 }

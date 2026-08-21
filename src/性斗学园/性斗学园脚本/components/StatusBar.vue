@@ -679,7 +679,7 @@
                     <label class="settings-row">
                       <span class="settings-row-icon"><i class="fas fa-microchip"></i></span>
                       <span class="settings-row-label">模型</span>
-                      <select v-model="novelAiImage.model">
+                      <select :value="novelAiImage.model" @change="handleNovelAiImageModelChange">
                         <option v-for="model in NOVELAI_IMAGE_MODEL_OPTIONS" :key="model" :value="model">
                           {{ model }}
                         </option>
@@ -1601,6 +1601,31 @@ function resetBackstreetSettings() {
 function resetImageSettings() {
   novelAiImage.value = { ...DEFAULT_NOVELAI_IMAGE_SETTINGS };
   novelAiImageStatus.value = '已恢复默认生图设置。';
+}
+
+function isNovelAiV5Model(model: string): boolean {
+  return /^nai-diffusion-5-(?:curated|full)$/i.test(model.trim());
+}
+
+function handleNovelAiImageModelChange(event: Event) {
+  const select = event.target;
+  if (!(select instanceof HTMLSelectElement)) return;
+
+  const nextModel = select.value;
+  const previousModel = novelAiImage.value.model;
+  if (nextModel === previousModel) return;
+
+  if (
+    isNovelAiV5Model(nextModel) &&
+    !window.confirm(
+      `NovelAI V5 Full 和 V5 Curated 不是无限制生图模型。\n\n请确保你了解 V5 的标准再使用。\n\n仍要选择 ${nextModel} 吗？`,
+    )
+  ) {
+    select.value = previousModel;
+    return;
+  }
+
+  novelAiImage.value.model = nextModel;
 }
 
 function resetSelectedSettings() {

@@ -8,7 +8,7 @@ import type {
   WorldbookEntry,
 } from './types';
 import { worldbookClient } from './worldbookClient';
-import { clipText, makeId, normalizeName, safeString, uniqueStrings } from './text';
+import { clipText, formatTimestampedLines, makeId, normalizeName, safeString, uniqueStrings } from './text';
 import { parseJsonBlock } from './xmlToolCall';
 
 const META_ENTRY = '[PHONE_META]';
@@ -271,8 +271,8 @@ function getMessageDisplayText(message: Partial<BackstreetMessage>): string {
   return `【图片】${text || '后街插图'}`;
 }
 
-function formatMemoryMessageLine(message: BackstreetMessage, thread: BackstreetThreadData): string {
-  return `${formatMessageTimestamp(message)} ${getMessageSpeaker(message, thread)}: ${getMessageDisplayText(message)}`;
+function formatMemoryMessageContentLine(message: BackstreetMessage, thread: BackstreetThreadData): string {
+  return `${getMessageSpeaker(message, thread)}: ${getMessageDisplayText(message)}`;
 }
 
 function extractReadableArchiveFallback(rawContent: string): string {
@@ -281,15 +281,20 @@ function extractReadableArchiveFallback(rawContent: string): string {
     .trim();
   const parsed = parseJsonBlock<Record<string, unknown>>(stripped);
   const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
-  const lines = messages
+  const normalizedMessages = messages
     .map(item => normalizeMessage((item || {}) as Partial<BackstreetMessage>))
     .filter((message): message is BackstreetMessage => !!message)
-    .slice(-12)
-    .map(message => {
-      const speaker = message.sender === 'user' ? '<user>' : message.sender === 'system' ? '系统' : '对方';
-      return `${formatMessageTimestamp(message)} ${speaker}: ${getMessageDisplayText(message)}`;
-    });
-  if (lines.length > 0) return lines.join('\n');
+    .slice(-12);
+  if (normalizedMessages.length > 0) {
+    return formatTimestampedLines(
+      normalizedMessages,
+      message => formatMessageTimestamp(message),
+      message => {
+        const speaker = message.sender === 'user' ? '<user>' : message.sender === 'system' ? '系统' : '对方';
+        return `${speaker}: ${getMessageDisplayText(message)}`;
+      },
+    );
+  }
 
   const textMatches = [...stripped.matchAll(/"text"\s*:\s*"((?:\\.|[^"\\])*)"/g)]
     .map(match => {
@@ -307,10 +312,11 @@ function extractReadableArchiveFallback(rawContent: string): string {
 
 function formatMemoryHitContent(rawContent: string, contact: string, thread: BackstreetThreadData): string {
   if (thread.messages.length > 0) {
-    return thread.messages
-      .slice(-12)
-      .map(message => formatMemoryMessageLine(message, thread))
-      .join('\n');
+    return formatTimestampedLines(
+      thread.messages.slice(-12),
+      message => formatMessageTimestamp(message),
+      message => formatMemoryMessageContentLine(message, thread),
+    );
   }
   return (
     extractReadableArchiveFallback(rawContent) ||
