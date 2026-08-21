@@ -933,10 +933,13 @@ export class BackstreetService {
     }
 
     const previousRef = safeString(message.imageRef);
+    const shouldReplaceFailureText =
+      Boolean(safeString(message.imageError)) && safeString(message.text).startsWith('插图生成失败：');
     const image = await generateNovelAiImage(message.imagePrompt || '', undefined, { applyPrefix: false });
     const nextMessage: BackstreetMessage = {
       ...message,
       kind: 'image',
+      text: shouldReplaceFailureText ? '图片' : message.text,
       imageRef: image.ref,
       imagePrompt: image.prompt,
       imageNegativePrompt: image.negativePrompt,

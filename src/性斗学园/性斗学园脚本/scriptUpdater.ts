@@ -1,7 +1,12 @@
 import { compare } from 'compare-versions';
 
-export const SCRIPT_VERSION = '3.6.0';
+export const SCRIPT_VERSION = '3.6.1';
 export const SCRIPT_UPDATE_EVENT = 'fatria-script-update-status';
+
+const JSDELIVR_HOST = 'cdn.jsdelivr.net';
+const JSDELIVR_REPOSITORY_PREFIX = '/gh/vincentrong2005/Fatria@';
+const SCRIPT_BUNDLE_PATH = '/dist/性斗学园/性斗学园脚本/index.js';
+const SCRIPT_IMPORT_URL_PATTERN = /(\bimport\s*(?:\(\s*)?['"])(https:\/\/[^'"\s]+)(['"]\s*\)?)/g;
 
 const UPDATE_MANIFEST_URL =
   'https://raw.githubusercontent.com/vincentrong2005/Fatria/main/src/%E6%80%A7%E6%96%97%E5%AD%A6%E5%9B%AD/%E6%80%A7%E6%96%97%E5%AD%A6%E5%9B%AD%E8%84%9A%E6%9C%AC/update-manifest.json';
@@ -10,13 +15,22 @@ const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export interface ScriptUpdateManifest {
   version: string;
+  /** Immutable Git tag holding this exact script release, for example `v3.6.0`. */
+  releaseTag: string;
   changelog?: string[];
+}
+
+export interface ApplyScriptUpdateResult {
+  updated: boolean;
+  message: string;
+  releaseTag?: string;
 }
 
 export interface ScriptUpdateState {
   currentVersion: string;
   latestVersion: string;
   hasUpdate: boolean;
+  isUsingMutableReference: boolean;
   status: 'idle' | 'checking' | 'available' | 'latest' | 'error';
   message: string;
   checkedAt?: number;
@@ -42,6 +56,7 @@ let scriptUpdateState: ScriptUpdateState = {
   currentVersion: SCRIPT_VERSION,
   latestVersion: SCRIPT_VERSION,
   hasUpdate: false,
+  isUsingMutableReference: false,
   status: 'idle',
   message: '尚未检查更新。',
 };
@@ -88,7 +103,9 @@ export async function checkScriptUpdate(options: CheckScriptUpdateOptions = {}):
   try {
     const manifest = await fetchUpdateManifest();
     const latestVersion = normalizeVersion(manifest.version);
-    const hasUpdate = compare(SCRIPT_VERSION, latestVersion, '<');
+    const hasNewerVersion = compare(SCRIPT_VERSION, latestVersion, '<');
+    const isUsingMutableReference = isCurrentScriptUsingMainReference();
+    const hasUpdate = hasNewerVersion || isUsingMutableReference;
 
     writeUpdateCache({
       ...cache,
@@ -100,10 +117,13 @@ export async function checkScriptUpdate(options: CheckScriptUpdateOptions = {}):
     setScriptUpdateState({
       latestVersion,
       hasUpdate,
+      isUsingMutableReference,
       status: hasUpdate ? 'available' : 'latest',
-      message: hasUpdate
+      message: hasNewerVersion
         ? `发现新版本 v${latestVersion}，请清除浏览器缓存后刷新浏览器。（帖子内标注也有只刷新单个脚本缓存的办法）`
-        : `当前已是最新版 v${SCRIPT_VERSION}。`,
+        : isUsingMutableReference
+          ? `当前使用 @main 链接，可固定到 v${latestVersion} 以避免后续缓存延迟。`
+          : `当前已是最新版 v${SCRIPT_VERSION}。`,
       checkedAt: now,
       manifest,
     });
@@ -143,13 +163,86 @@ export function showScriptUpdateGuide(manifestOverride?: ScriptUpdateManifest): 
   });
 }
 
-function promptScriptUpdateGuide(manifest: ScriptUpdateManifest): void {
+/**
+ * Replace this script's official jsDelivr import in the character script library
+ * with the immutable release URL described by the update manifest.
+ */
+export async function applyScriptUpdate(manifestOverride?: ScriptUpdateManifest): Promise<ApplyScriptUpdateResult> {
+  const manifest = manifestOverride ?? scriptUpdateState.manifest;
+  if (!manifest) {
+    return { updated: false, message: '尚未读取到更新信息，请先检查更新。' };
+  }
+
+  const releaseTag = normalizeReleaseTag(manifest.releaseTag);
+  if (!releaseTag) {
+    return { updated: false, message: '更新清单缺少有效的发布标签，无法自动更新。' };
+  }
+
+  const releaseUrl = getReleaseScriptUrl(releaseTag);
+  try {
+    const response = await fetch(releaseUrl, { method: 'HEAD', cache: 'no-store' });
+    if (!response.ok) {
+      return {
+        updated: false,
+        message: `发布标签 ${releaseTag} 尚不可用（HTTP ${response.status}），请稍后重试。`,
+      };
+    }
+  } catch (error) {
+    console.warn('[性斗学园脚本] 校验发布标签失败:', error);
+    return { updated: false, message: '无法校验发布标签，请检查网络后重试。' };
+  }
+
+  const scriptId = getScriptId();
+  let foundCurrentScript = false;
+  let updatedImport = false;
+
+  try {
+    updateScriptTreesWith(
+      trees =>
+        trees.map(tree =>
+          updateScriptTreeImport(tree, scriptId, releaseTag, result => {
+            foundCurrentScript ||= result.found;
+            updatedImport ||= result.updated;
+          }),
+        ),
+      { type: 'character' },
+    );
+  } catch (error) {
+    console.error('[性斗学园脚本] 写入角色脚本库失败:', error);
+    return { updated: false, message: '写入角色脚本库失败，请检查酒馆助手权限后重试。' };
+  }
+
+  if (!foundCurrentScript) {
+    return { updated: false, message: '当前脚本不在角色脚本库中，未修改任何内容。' };
+  }
+  if (!updatedImport) {
+    return {
+      updated: false,
+      message: '当前脚本不是官方 jsDelivr 外链，已为安全起见保留原内容。',
+    };
+  }
+
+  return {
+    updated: true,
+    message: `已改为固定版本 ${releaseTag}，正在重新加载脚本。`,
+    releaseTag,
+  };
+}
+
+async function promptScriptUpdateGuide(manifest: ScriptUpdateManifest): Promise<void> {
   const latestVersion = normalizeVersion(manifest.version);
+  const action = isCurrentScriptUsingMainReference() ? '固定到发布版本' : '更新到新版本';
   const confirmed = window.confirm(
-    `发现性斗学园脚本新版本 v${latestVersion}。\n\n当前运行版本：v${SCRIPT_VERSION}\n\n是否查看清除浏览器缓存的方法？`,
+    `发现性斗学园脚本可${action} v${latestVersion}。\n\n当前运行版本：v${SCRIPT_VERSION}\n\n是否立即更新？`,
   );
   if (confirmed) {
-    showScriptUpdateGuide(manifest);
+    const result = await applyScriptUpdate(manifest);
+    if (result.updated) {
+      notifySuccess(result.message);
+      window.setTimeout(() => window.location.reload(), 450);
+    } else {
+      notifyError(result.message);
+    }
     return;
   }
 
@@ -166,7 +259,7 @@ function notifyAvailableScriptUpdate(
 ): void {
   const latestVersion = normalizeVersion(manifest.version);
   if (options.prompt && cache.dismissedVersion !== latestVersion) {
-    promptScriptUpdateGuide(manifest);
+    void promptScriptUpdateGuide(manifest);
     return;
   }
 
@@ -190,29 +283,156 @@ function normalizeManifest(manifest: Partial<ScriptUpdateManifest>): ScriptUpdat
   if (!version) {
     throw new Error('更新清单缺少 version。');
   }
+  const releaseTag = normalizeReleaseTag(manifest.releaseTag);
+  if (!releaseTag) {
+    throw new Error('更新清单缺少 releaseTag。');
+  }
   return {
     version,
+    releaseTag,
     changelog: Array.isArray(manifest.changelog) ? manifest.changelog.map(safeString).filter(Boolean) : [],
   };
 }
 
 function applyCachedUpdateState(cache: ScriptUpdateCache): void {
   const latestVersion = normalizeVersion(cache.latestVersion || SCRIPT_VERSION) || SCRIPT_VERSION;
-  const hasUpdate = compare(SCRIPT_VERSION, latestVersion, '<');
+  const hasNewerVersion = compare(SCRIPT_VERSION, latestVersion, '<');
+  const isUsingMutableReference = isCurrentScriptUsingMainReference();
+  const hasUpdate = hasNewerVersion || isUsingMutableReference;
   setScriptUpdateState({
     latestVersion,
     hasUpdate,
+    isUsingMutableReference,
     status: hasUpdate ? 'available' : 'latest',
-    message: hasUpdate
+    message: hasNewerVersion
       ? `发现新版本 v${latestVersion}，请清除浏览器缓存后重新加载脚本。`
-      : `当前已是最新版 v${SCRIPT_VERSION}。`,
+      : isUsingMutableReference
+        ? `当前使用 @main 链接，可固定到 v${latestVersion} 以避免后续缓存延迟。`
+        : `当前已是最新版 v${SCRIPT_VERSION}。`,
     checkedAt: cache.lastCheckedAt,
-    manifest: cache.manifest ?? (hasUpdate ? { version: latestVersion, changelog: [] } : undefined),
+    manifest:
+      cache.manifest ??
+      (hasUpdate ? { version: latestVersion, releaseTag: `v${latestVersion}`, changelog: [] } : undefined),
   });
 }
 
 function normalizeVersion(version: unknown): string {
   return safeString(version).replace(/^v/i, '');
+}
+
+function normalizeReleaseTag(value: unknown): string {
+  const tag = safeString(value).replace(/^@/, '');
+  return /^[A-Za-z0-9._-]+$/.test(tag) ? tag : '';
+}
+
+function getReleaseScriptUrl(releaseTag: string): string {
+  return `https://${JSDELIVR_HOST}${JSDELIVR_REPOSITORY_PREFIX}${encodeURIComponent(releaseTag)}${SCRIPT_BUNDLE_PATH}`;
+}
+
+function isCurrentScriptUsingMainReference(): boolean {
+  try {
+    const script = findScriptById(getScriptTrees({ type: 'character' }), getScriptId());
+    return script ? hasOfficialScriptReference(script.content, 'main') : false;
+  } catch (error) {
+    console.warn('[性斗学园脚本] 无法读取当前脚本链接:', error);
+    return false;
+  }
+}
+
+function findScriptById(trees: ScriptTree[], targetScriptId: string): Script | null {
+  for (const tree of trees) {
+    if (tree.type === 'script' && tree.id === targetScriptId) {
+      return tree;
+    }
+    if (tree.type === 'folder') {
+      const script = findScriptById(tree.scripts, targetScriptId);
+      if (script) return script;
+    }
+  }
+  return null;
+}
+
+interface ScriptTreeUpdateResult {
+  found: boolean;
+  updated: boolean;
+}
+
+function updateScriptTreeImport(
+  tree: ScriptTree,
+  targetScriptId: string,
+  releaseTag: string,
+  notify: (result: ScriptTreeUpdateResult) => void,
+): ScriptTree {
+  if (tree.type === 'folder') {
+    return {
+      ...tree,
+      scripts: tree.scripts.map(script => updateScriptTreeImport(script, targetScriptId, releaseTag, notify) as Script),
+    };
+  }
+
+  if (tree.id !== targetScriptId) {
+    return tree;
+  }
+
+  const content = replaceOfficialScriptImport(tree.content, releaseTag);
+  notify({ found: true, updated: content !== tree.content });
+  return content === tree.content ? tree : { ...tree, content };
+}
+
+function replaceOfficialScriptImport(content: string, releaseTag: string): string {
+  return content.replace(SCRIPT_IMPORT_URL_PATTERN, (whole, prefix: string, urlText: string, suffix: string) => {
+    const replacement = replaceOfficialScriptUrl(urlText, releaseTag);
+    return replacement ? `${prefix}${replacement}${suffix}` : whole;
+  });
+}
+
+function hasOfficialScriptReference(content: string, expectedReference: string): boolean {
+  for (const match of content.matchAll(SCRIPT_IMPORT_URL_PATTERN)) {
+    const reference = getOfficialScriptReference(match[2]);
+    if (reference === expectedReference) return true;
+  }
+  return false;
+}
+
+function replaceOfficialScriptUrl(urlText: string, releaseTag: string): string | null {
+  try {
+    const url = new URL(urlText);
+    const bundlePathIndex = getOfficialScriptBundlePathIndex(url);
+    if (bundlePathIndex < 0) {
+      return null;
+    }
+
+    url.pathname = `${JSDELIVR_REPOSITORY_PREFIX}${encodeURIComponent(releaseTag)}${url.pathname.slice(bundlePathIndex)}`;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+function getOfficialScriptReference(urlText: string): string | null {
+  try {
+    const url = new URL(urlText);
+    const bundlePathIndex = getOfficialScriptBundlePathIndex(url);
+    if (bundlePathIndex < 0) return null;
+    return decodeURIComponent(url.pathname.slice(JSDELIVR_REPOSITORY_PREFIX.length, bundlePathIndex));
+  } catch {
+    return null;
+  }
+}
+
+function getOfficialScriptBundlePathIndex(url: URL): number {
+  if (
+    url.protocol !== 'https:' ||
+    url.hostname !== JSDELIVR_HOST ||
+    !url.pathname.startsWith(JSDELIVR_REPOSITORY_PREFIX)
+  ) {
+    return -1;
+  }
+
+  const bundlePathIndex = url.pathname.indexOf('/dist/', JSDELIVR_REPOSITORY_PREFIX.length);
+  return bundlePathIndex >= 0 && decodeURIComponent(url.pathname.slice(bundlePathIndex)) === SCRIPT_BUNDLE_PATH
+    ? bundlePathIndex
+    : -1;
 }
 
 function buildUpdateGuideText(manifest: ScriptUpdateManifest): string {
@@ -224,13 +444,13 @@ function buildUpdateGuideText(manifest: ScriptUpdateManifest): string {
     '',
     `当前运行版本：v${SCRIPT_VERSION}`,
     '',
-    '这次不会自动改写角色卡脚本内容。',
-    '如果你的脚本条目是外链 import，请清除浏览器缓存后刷新酒馆页面，让浏览器重新加载 GitHub/CDN 上的新脚本。',
+    '在设置页点击“更新至指定版本”后，脚本会尝试把角色脚本库中的官方 jsDelivr 链接改为固定发布标签。',
+    '如果当前条目不是官方外链、是内联脚本，或发布标签尚不可用，则不会自动改写。',
     '',
     '常用处理方法：',
-    '1. 在浏览器里强制刷新当前页面。',
-    '2. 如果仍然是旧版，清除该站点缓存后重新打开酒馆。',
-    '3. 若使用 jsDelivr 分支链接且 CDN 仍未刷新，请稍等缓存更新，或临时改用带版本号/commit 的链接。',
+    '1. 优先点击设置页的“更新至指定版本”。',
+    '2. 如果按钮提示当前条目不是官方外链，请手动将 import 改为带 `@vX.Y.Z` 的固定版本链接。',
+    '3. 若发布标签尚不可用，请等待发布完成后再检查更新。',
     changelogText,
   ].join('\n');
 }

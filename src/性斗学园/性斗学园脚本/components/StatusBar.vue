@@ -823,11 +823,11 @@
                       </button>
                       <button
                         type="button"
-                        :disabled="!scriptUpdateState.hasUpdate || isCheckingScriptUpdate"
-                        @click="handleShowScriptUpdateGuide"
+                        :disabled="!scriptUpdateState.hasUpdate || isCheckingScriptUpdate || isApplyingScriptUpdate"
+                        @click="handleApplyScriptUpdate"
                       >
-                        <i class="fas fa-broom"></i>
-                        处理方法
+                        <i class="fas fa-download"></i>
+                        {{ isApplyingScriptUpdate ? '更新中' : `更新至 v${scriptUpdateState.latestVersion}` }}
                       </button>
                     </div>
 
@@ -903,6 +903,7 @@ import {
   type NovelAiImageSettings,
 } from '../phone/novelAiImageSettings';
 import {
+  applyScriptUpdate,
   checkScriptUpdate,
   getScriptUpdateState,
   SCRIPT_UPDATE_EVENT,
@@ -1104,6 +1105,7 @@ const novelAiImageStatus = ref('');
 const isNovelAiImageTesting = ref(false);
 const scriptUpdateState = ref<ScriptUpdateState>(getScriptUpdateState());
 const isCheckingScriptUpdate = ref(false);
+const isApplyingScriptUpdate = ref(false);
 const resetSettingTargets = ref({
   display: true,
   backstreet: false,
@@ -1680,6 +1682,40 @@ async function handleCheckScriptUpdate() {
 function handleShowScriptUpdateGuide() {
   showScriptUpdateGuide(scriptUpdateState.value.manifest);
   scriptUpdateState.value = getScriptUpdateState();
+}
+
+async function handleApplyScriptUpdate() {
+  if (!scriptUpdateState.value.hasUpdate || isApplyingScriptUpdate.value) return;
+
+  const manifest = scriptUpdateState.value.manifest;
+  const releaseTag = manifest?.releaseTag;
+  if (!manifest || !releaseTag) {
+    handleShowScriptUpdateGuide();
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `将当前角色脚本库中的性斗学园脚本更新为 ${releaseTag}。\n\n更新后会固定使用此版本，并重新加载酒馆页面。`,
+  );
+  if (!confirmed) return;
+
+  isApplyingScriptUpdate.value = true;
+  try {
+    const result = await applyScriptUpdate(manifest);
+    if (!result.updated) {
+      if (typeof toastr !== 'undefined') {
+        toastr.error(result.message, '性斗学园脚本更新');
+      }
+      return;
+    }
+
+    if (typeof toastr !== 'undefined') {
+      toastr.success(result.message, '性斗学园脚本更新');
+    }
+    window.setTimeout(() => window.location.reload(), 450);
+  } finally {
+    isApplyingScriptUpdate.value = false;
+  }
 }
 
 function openWallpaperFilePicker() {
