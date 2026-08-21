@@ -1,12 +1,15 @@
 import { compare } from 'compare-versions';
 
-export const SCRIPT_VERSION = '3.6.3';
+export const SCRIPT_VERSION = '3.6.5';
 export const SCRIPT_UPDATE_EVENT = 'fatria-script-update-status';
 
 const JSDELIVR_HOST = 'cdn.jsdelivr.net';
-const JSDELIVR_REPOSITORY_PREFIX = '/gh/vincentrong2005/Fatria@';
+const JSDELIVR_REPOSITORY_PATH = '/gh/vincentrong2005/Fatria';
+const JSDELIVR_REPOSITORY_PREFIX = `${JSDELIVR_REPOSITORY_PATH}@`;
 const SCRIPT_BUNDLE_PATH = '/dist/性斗学园/性斗学园脚本/index.js';
 const SCRIPT_IMPORT_URL_PATTERN = /(\bimport\s*(?:\(\s*)?['"])(https:\/\/[^'"\s]+)(['"]\s*\)?)/g;
+const SCRIPT_URL_LITERAL_PATTERN = /(^\s*['"])(https:\/\/[^'"\s]+)(['"]\s*;?\s*$)/gm;
+const SCRIPT_URL_BARE_PATTERN = /(^\s*)(https:\/\/[^'"\s]+)(\s*;?\s*$)/gm;
 
 const UPDATE_MANIFEST_URL =
   'https://raw.githubusercontent.com/vincentrong2005/Fatria/main/src/%E6%80%A7%E6%96%97%E5%AD%A6%E5%9B%AD/%E6%80%A7%E6%96%97%E5%AD%A6%E5%9B%AD%E8%84%9A%E6%9C%AC/update-manifest.json';
@@ -380,18 +383,28 @@ function updateScriptTreeImport(
 }
 
 function replaceOfficialScriptImport(content: string, releaseTag: string): string {
-  return content.replace(SCRIPT_IMPORT_URL_PATTERN, (whole, prefix: string, urlText: string, suffix: string) => {
-    const replacement = replaceOfficialScriptUrl(urlText, releaseTag);
-    return replacement ? `${prefix}${replacement}${suffix}` : whole;
-  });
+  let nextContent = replaceScriptUrlPattern(content, SCRIPT_IMPORT_URL_PATTERN, releaseTag);
+  nextContent = replaceScriptUrlPattern(nextContent, SCRIPT_URL_LITERAL_PATTERN, releaseTag);
+  return replaceScriptUrlPattern(nextContent, SCRIPT_URL_BARE_PATTERN, releaseTag);
 }
 
 function hasOfficialScriptReference(content: string, expectedReference: string): boolean {
-  for (const match of content.matchAll(SCRIPT_IMPORT_URL_PATTERN)) {
-    const reference = getOfficialScriptReference(match[2]);
-    if (reference === expectedReference) return true;
+  for (const pattern of [SCRIPT_IMPORT_URL_PATTERN, SCRIPT_URL_LITERAL_PATTERN, SCRIPT_URL_BARE_PATTERN]) {
+    pattern.lastIndex = 0;
+    for (const match of content.matchAll(pattern)) {
+      const reference = getOfficialScriptReference(match[2]);
+      if (reference === expectedReference) return true;
+    }
   }
   return false;
+}
+
+function replaceScriptUrlPattern(content: string, pattern: RegExp, releaseTag: string): string {
+  pattern.lastIndex = 0;
+  return content.replace(pattern, (whole, prefix: string, urlText: string, suffix: string) => {
+    const replacement = replaceOfficialScriptUrl(urlText, releaseTag);
+    return replacement ? `${prefix}${replacement}${suffix}` : whole;
+  });
 }
 
 function replaceOfficialScriptUrl(urlText: string, releaseTag: string): string | null {
@@ -414,7 +427,8 @@ function getOfficialScriptReference(urlText: string): string | null {
     const url = new URL(urlText);
     const bundlePathIndex = getOfficialScriptBundlePathIndex(url);
     if (bundlePathIndex < 0) return null;
-    return decodeURIComponent(url.pathname.slice(JSDELIVR_REPOSITORY_PREFIX.length, bundlePathIndex));
+    const referencePath = url.pathname.slice(JSDELIVR_REPOSITORY_PATH.length, bundlePathIndex);
+    return referencePath ? decodeURIComponent(referencePath.slice(1)) : 'main';
   } catch {
     return null;
   }
@@ -424,15 +438,20 @@ function getOfficialScriptBundlePathIndex(url: URL): number {
   if (
     url.protocol !== 'https:' ||
     url.hostname !== JSDELIVR_HOST ||
-    !url.pathname.startsWith(JSDELIVR_REPOSITORY_PREFIX)
+    !url.pathname.startsWith(JSDELIVR_REPOSITORY_PATH)
   ) {
     return -1;
   }
 
-  const bundlePathIndex = url.pathname.indexOf('/dist/', JSDELIVR_REPOSITORY_PREFIX.length);
-  return bundlePathIndex >= 0 && decodeURIComponent(url.pathname.slice(bundlePathIndex)) === SCRIPT_BUNDLE_PATH
-    ? bundlePathIndex
-    : -1;
+  const bundlePathIndex = url.pathname.indexOf('/dist/', JSDELIVR_REPOSITORY_PATH.length);
+  if (bundlePathIndex < 0) return -1;
+
+  const referencePath = url.pathname.slice(JSDELIVR_REPOSITORY_PATH.length, bundlePathIndex);
+  if (referencePath !== '' && !/^@[A-Za-z0-9._-]+$/.test(referencePath)) {
+    return -1;
+  }
+
+  return decodeURIComponent(url.pathname.slice(bundlePathIndex)) === SCRIPT_BUNDLE_PATH ? bundlePathIndex : -1;
 }
 
 function buildUpdateGuideText(manifest: ScriptUpdateManifest): string {
