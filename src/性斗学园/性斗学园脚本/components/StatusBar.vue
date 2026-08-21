@@ -1,7 +1,7 @@
 <template>
   <div v-if="isVisible" class="status-bar-overlay" @click.self="close">
     <div ref="phoneContainerRef" class="status-bar-container" :style="phonePositionStyle" @click.stop>
-      <div class="phone-device" :class="{ 'phone-dragging': isPhoneDragging }">
+      <div class="phone-device" :class="{ 'phone-dragging': isPhoneDragging, 'phone-lite-visuals': isLiteVisuals }">
         <div class="phone-frame" :class="phoneFrameClasses" :style="phoneStyle">
           <div
             ref="phoneDragHandleRef"
@@ -108,7 +108,11 @@
               <div class="status-content" :class="{ 'status-content-flush': currentPage === 'backstreet' }">
                 <DashboardPage v-if="currentPage === 'dashboard'" :character-data="characterData" />
 
-                <ProfilePage v-if="currentPage === 'profile'" :character-data="characterData" :combat-data="combatData" />
+                <ProfilePage
+                  v-if="currentPage === 'profile'"
+                  :character-data="characterData"
+                  :combat-data="combatData"
+                />
 
                 <InventoryPage v-if="currentPage === 'inventory'" :character-data="characterData" />
 
@@ -133,627 +137,722 @@
                 <div v-if="currentPage === 'settings'" class="settings-page">
                   <details class="settings-category-panel" open>
                     <summary class="settings-category-heading">
-                    <span>界面显示</span>
-                    <small>外观与入口</small>
-                    </summary>
-
-                  <section class="settings-section">
-                    <div class="settings-section-title">
-                      <span>手机屏幕背景</span>
-                      <small>桌面与应用底图</small>
-                    </div>
-
-                    <div class="wallpaper-preview-card" :style="wallpaperLayerStyle">
-                      <img v-if="customWallpaperSrc" class="wallpaper-preview-image" :src="customWallpaperSrc" alt="" />
-                      <div class="wallpaper-preview-status">
-                        <span>{{ currentTime }}</span>
-                        <span>{{ currentLocation }}</span>
-                      </div>
-                      <button
-                        class="wallpaper-camera-button"
-                        type="button"
-                        title="上传背景图"
-                        aria-label="上传背景图"
-                        @click="openWallpaperFilePicker"
-                      >
-                        <i class="fas fa-camera"></i>
-                      </button>
-                    </div>
-
-                    <div class="wallpaper-preset-grid">
-                      <button
-                        v-for="preset in WALLPAPER_PRESETS"
-                        :key="preset.value"
-                        class="wallpaper-preset-button"
-                        :class="{ active: phonePrefs.wallpaperPreset === preset.value && !phonePrefs.wallpaperUrl }"
-                        type="button"
-                        @click="selectWallpaperPreset(preset.value)"
-                      >
-                        <span class="wallpaper-preset-swatch" :style="{ backgroundImage: preset.background }"></span>
-                        <span>{{ preset.label }}</span>
-                      </button>
-                    </div>
-
-                    <label class="settings-text-field">
-                      <span>图片地址</span>
-                      <input v-model="phonePrefs.wallpaperUrl" type="text" placeholder="https://..." />
-                    </label>
-
-                    <div class="settings-actions">
-                      <button class="settings-action-primary" type="button" @click="openWallpaperFilePicker">
-                        <i class="fas fa-image"></i>
-                        上传图片
-                      </button>
-                      <button type="button" @click="clearWallpaper">
-                        <i class="fas fa-rotate-left"></i>
-                        恢复默认
-                      </button>
-                    </div>
-
-                    <input
-                      ref="wallpaperInputRef"
-                      class="wallpaper-file-input"
-                      type="file"
-                      accept="image/*"
-                      @change="handleWallpaperFileSelected"
-                    />
-                  </section>
-
-                  <section class="settings-section">
-                    <div class="settings-section-title">
                       <span>界面显示</span>
-                      <small>字体与主题</small>
-                    </div>
+                      <small>外观与入口</small>
+                    </summary>
 
-                    <label class="settings-row">
-                      <span class="settings-row-icon"><i class="fas fa-font"></i></span>
-                      <span class="settings-row-label">界面字体</span>
-                      <select v-model="phonePrefs.fontFamily">
-                        <option v-for="font in PHONE_FONT_OPTIONS" :key="font.value" :value="font.value">
-                          {{ font.label }}
-                        </option>
-                      </select>
-                    </label>
+                    <section class="settings-section">
+                      <div class="settings-section-title">
+                        <span>手机屏幕背景</span>
+                        <small>桌面与应用底图</small>
+                      </div>
 
-                    <label class="settings-row">
-                      <span class="settings-row-icon"><i class="fas fa-palette"></i></span>
-                      <span class="settings-row-label">主题色</span>
-                      <select v-model="phonePrefs.theme">
-                        <option v-for="theme in PHONE_THEME_OPTIONS" :key="theme.value" :value="theme.value">
-                          {{ theme.label }}
-                        </option>
-                      </select>
-                    </label>
-                  </section>
-
-                  <section class="settings-section">
-                    <div class="settings-section-title">
-                      <span>图标美化</span>
-                      <small>桌面与入口</small>
-                    </div>
-
-                    <div class="icon-style-group">
-                      <div class="icon-style-label">桌面 App</div>
-                      <div class="icon-style-grid">
+                      <div class="wallpaper-preview-card" :style="wallpaperLayerStyle">
+                        <img
+                          v-if="customWallpaperSrc"
+                          class="wallpaper-preview-image"
+                          :src="customWallpaperSrc"
+                          alt=""
+                        />
+                        <div class="wallpaper-preview-status">
+                          <span>{{ currentTime }}</span>
+                          <span>{{ currentLocation }}</span>
+                        </div>
                         <button
-                          v-for="style in APP_ICON_STYLE_OPTIONS"
-                          :key="style.value"
-                          class="icon-style-button"
-                          :class="{ active: phonePrefs.appIconStyle === style.value }"
+                          class="wallpaper-camera-button"
                           type="button"
-                          @click="phonePrefs.appIconStyle = style.value"
+                          title="上传背景图"
+                          aria-label="上传背景图"
+                          @click="openWallpaperFilePicker"
                         >
-                          <span class="icon-style-preview" :class="`preview-app-${style.value}`">
-                            <i class="fas fa-id-card"></i>
-                          </span>
-                          <span>{{ style.label }}</span>
+                          <i class="fas fa-camera"></i>
                         </button>
                       </div>
-                    </div>
 
-                    <div class="icon-style-group">
-                      <div class="icon-style-label">悬浮入口</div>
-                      <div class="icon-style-grid">
+                      <div class="wallpaper-preset-grid">
                         <button
-                          v-for="style in LAUNCHER_STYLE_OPTIONS"
-                          :key="style.value"
-                          class="icon-style-button"
-                          :class="{ active: phonePrefs.launcherStyle === style.value }"
+                          v-for="preset in WALLPAPER_PRESETS"
+                          :key="preset.value"
+                          class="wallpaper-preset-button"
+                          :class="{ active: phonePrefs.wallpaperPreset === preset.value && !phonePrefs.wallpaperUrl }"
                           type="button"
-                          @click="phonePrefs.launcherStyle = style.value"
+                          @click="selectWallpaperPreset(preset.value)"
                         >
-                          <span class="icon-style-preview launcher-preview" :class="`preview-launcher-${style.value}`">
-                            <i class="fas fa-mobile-alt"></i>
-                          </span>
-                          <span>{{ style.label }}</span>
+                          <span class="wallpaper-preset-swatch" :style="{ backgroundImage: preset.background }"></span>
+                          <span>{{ preset.label }}</span>
                         </button>
                       </div>
-                    </div>
-                  </section>
 
-                  <section class="settings-section settings-section-compact">
-                    <div class="settings-section-title">
-                      <span>背景细节</span>
-                      <small>透明度与质感</small>
-                    </div>
+                      <label class="settings-text-field">
+                        <span>图片地址</span>
+                        <input v-model="phonePrefs.wallpaperUrl" type="text" placeholder="https://..." />
+                      </label>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>壁纸强度</span>
-                        <strong>{{ phonePrefs.wallpaperOpacity }}%</strong>
-                      </span>
-                      <input v-model.number="phonePrefs.wallpaperOpacity" type="range" min="20" max="100" step="5" />
-                    </label>
+                      <div class="settings-actions">
+                        <button class="settings-action-primary" type="button" @click="openWallpaperFilePicker">
+                          <i class="fas fa-image"></i>
+                          上传图片
+                        </button>
+                        <button type="button" @click="clearWallpaper">
+                          <i class="fas fa-rotate-left"></i>
+                          恢复默认
+                        </button>
+                      </div>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>背景模糊</span>
-                        <strong>{{ phonePrefs.wallpaperBlur }}px</strong>
-                      </span>
-                      <input v-model.number="phonePrefs.wallpaperBlur" type="range" min="0" max="16" step="1" />
-                    </label>
+                      <input
+                        ref="wallpaperInputRef"
+                        class="wallpaper-file-input"
+                        type="file"
+                        accept="image/*"
+                        @change="handleWallpaperFileSelected"
+                      />
+                    </section>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>遮罩深度</span>
-                        <strong>{{ phonePrefs.tintStrength }}%</strong>
-                      </span>
-                      <input v-model.number="phonePrefs.tintStrength" type="range" min="0" max="70" step="5" />
-                    </label>
-                  </section>
+                    <section class="settings-section">
+                      <div class="settings-section-title">
+                        <span>界面显示</span>
+                        <small>字体与主题</small>
+                      </div>
 
+                      <label class="settings-row">
+                        <span class="settings-row-icon"><i class="fas fa-font"></i></span>
+                        <span class="settings-row-label">界面字体</span>
+                        <select v-model="phonePrefs.fontFamily">
+                          <option v-for="font in PHONE_FONT_OPTIONS" :key="font.value" :value="font.value">
+                            {{ font.label }}
+                          </option>
+                        </select>
+                      </label>
+
+                      <label class="settings-row">
+                        <span class="settings-row-icon"><i class="fas fa-palette"></i></span>
+                        <span class="settings-row-label">主题色</span>
+                        <select v-model="phonePrefs.theme">
+                          <option v-for="theme in PHONE_THEME_OPTIONS" :key="theme.value" :value="theme.value">
+                            {{ theme.label }}
+                          </option>
+                        </select>
+                      </label>
+                    </section>
+
+                    <section class="settings-section">
+                      <div class="settings-section-title">
+                        <span>图标美化</span>
+                        <small>桌面与入口</small>
+                      </div>
+
+                      <div class="icon-style-group">
+                        <div class="icon-style-label">桌面 App</div>
+                        <div class="icon-style-grid">
+                          <button
+                            v-for="style in APP_ICON_STYLE_OPTIONS"
+                            :key="style.value"
+                            class="icon-style-button"
+                            :class="{ active: phonePrefs.appIconStyle === style.value }"
+                            type="button"
+                            @click="phonePrefs.appIconStyle = style.value"
+                          >
+                            <span class="icon-style-preview" :class="`preview-app-${style.value}`">
+                              <i class="fas fa-id-card"></i>
+                            </span>
+                            <span>{{ style.label }}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="icon-style-group">
+                        <div class="icon-style-label">悬浮入口</div>
+                        <div class="icon-style-grid">
+                          <button
+                            v-for="style in LAUNCHER_STYLE_OPTIONS"
+                            :key="style.value"
+                            class="icon-style-button"
+                            :class="{ active: phonePrefs.launcherStyle === style.value }"
+                            type="button"
+                            @click="phonePrefs.launcherStyle = style.value"
+                          >
+                            <span
+                              class="icon-style-preview launcher-preview"
+                              :class="`preview-launcher-${style.value}`"
+                            >
+                              <i class="fas fa-mobile-alt"></i>
+                            </span>
+                            <span>{{ style.label }}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="settings-section settings-section-compact">
+                      <div class="settings-section-title">
+                        <span>背景细节</span>
+                        <small>透明度与质感</small>
+                      </div>
+
+                      <label class="settings-slider-row">
+                        <span>
+                          <span>壁纸强度</span>
+                          <strong>{{ phonePrefs.wallpaperOpacity }}%</strong>
+                        </span>
+                        <input v-model.number="phonePrefs.wallpaperOpacity" type="range" min="20" max="100" step="5" />
+                      </label>
+
+                      <label class="settings-slider-row">
+                        <span>
+                          <span>背景模糊</span>
+                          <strong>{{ phonePrefs.wallpaperBlur }}px</strong>
+                        </span>
+                        <input v-model.number="phonePrefs.wallpaperBlur" type="range" min="0" max="16" step="1" />
+                      </label>
+
+                      <label class="settings-slider-row">
+                        <span>
+                          <span>遮罩深度</span>
+                          <strong>{{ phonePrefs.tintStrength }}%</strong>
+                        </span>
+                        <input v-model.number="phonePrefs.tintStrength" type="range" min="0" max="70" step="5" />
+                      </label>
+
+                      <label class="settings-row">
+                        <span class="settings-row-icon"><i class="fas fa-gauge-high"></i></span>
+                        <span class="settings-row-label">视觉效果</span>
+                        <select v-model="phonePrefs.visualMode">
+                          <option v-for="mode in PHONE_VISUAL_MODE_OPTIONS" :key="mode.value" :value="mode.value">
+                            {{ mode.label }}
+                          </option>
+                        </select>
+                      </label>
+                    </section>
                   </details>
 
                   <details class="settings-category-panel" open>
                     <summary class="settings-category-heading">
-                    <span>后街设置</span>
-                    <small>聊天与模型</small>
+                      <span>后街设置</span>
+                      <small>聊天与模型</small>
                     </summary>
 
-                  <section class="settings-section">
-                    <div class="settings-section-title">
-                      <span>后街第二 API</span>
-                      <small>OpenAI Compatible</small>
-                    </div>
+                    <section class="settings-section">
+                      <div class="settings-section-title">
+                        <span>后街第二 API</span>
+                        <small>OpenAI Compatible</small>
+                      </div>
 
-                    <label class="settings-row">
-                      <span class="settings-row-icon"><i class="fas fa-plug-circle-bolt"></i></span>
-                      <span class="settings-row-label">启用第二 API</span>
-                      <input
-                        v-model="secondaryPhoneApi.enabled"
-                        class="settings-toggle"
-                        type="checkbox"
-                        @change="persistSecondaryApiSettings()"
-                      />
-                    </label>
+                      <label class="settings-row">
+                        <span class="settings-row-icon"><i class="fas fa-plug-circle-bolt"></i></span>
+                        <span class="settings-row-label">启用第二 API</span>
+                        <input
+                          v-model="secondaryPhoneApi.enabled"
+                          class="settings-toggle"
+                          type="checkbox"
+                          @change="persistSecondaryApiSettings()"
+                        />
+                      </label>
 
-                    <label class="settings-text-field">
-                      <span>API URL</span>
-                      <input
-                        v-model.trim="secondaryPhoneApi.baseUrl"
-                        type="text"
-                        placeholder="https://api.example.com/v1"
-                      />
-                    </label>
+                      <label class="settings-text-field">
+                        <span>API URL</span>
+                        <input
+                          v-model.trim="secondaryPhoneApi.baseUrl"
+                          type="text"
+                          placeholder="https://api.example.com/v1"
+                        />
+                      </label>
 
-                    <label class="settings-text-field">
-                      <span>API Key</span>
-                      <input v-model.trim="secondaryPhoneApi.apiKey" type="password" placeholder="sk-..." />
-                    </label>
+                      <label class="settings-text-field">
+                        <span>API Key</span>
+                        <input v-model.trim="secondaryPhoneApi.apiKey" type="password" placeholder="sk-..." />
+                      </label>
 
-                    <label class="settings-text-field">
-                      <span>调用模型</span>
-                      <select
-                        v-model="secondaryPhoneApi.model"
-                        :disabled="secondaryApiModelOptions.length === 0"
-                        @change="persistSecondaryApiSettings()"
-                      >
-                        <option value="">请先读取模型后选择</option>
-                        <option v-for="model in secondaryApiModelOptions" :key="model" :value="model">
-                          {{ model }}
-                        </option>
-                      </select>
-                    </label>
+                      <label class="settings-text-field">
+                        <span>调用模型</span>
+                        <select
+                          v-model="secondaryPhoneApi.model"
+                          :disabled="secondaryApiModelOptions.length === 0"
+                          @change="persistSecondaryApiSettings()"
+                        >
+                          <option value="">请先读取模型后选择</option>
+                          <option v-for="model in secondaryApiModelOptions" :key="model" :value="model">
+                            {{ model }}
+                          </option>
+                        </select>
+                      </label>
 
-                    <div class="settings-actions">
-                      <button
-                        class="settings-action-primary"
-                        type="button"
-                        :disabled="isSecondaryApiTesting"
-                        @click="refreshSecondaryApiModels"
-                      >
-                        <i class="fas fa-cloud-arrow-down"></i>
-                        {{ isSecondaryApiTesting ? '读取中' : '读取模型' }}
-                      </button>
-                      <button type="button" @click="clearSecondaryApiModel">
-                        <i class="fas fa-rotate-left"></i>
-                        清除模型
-                      </button>
-                    </div>
+                      <div class="settings-actions">
+                        <button
+                          class="settings-action-primary"
+                          type="button"
+                          :disabled="isSecondaryApiTesting"
+                          @click="refreshSecondaryApiModels"
+                        >
+                          <i class="fas fa-cloud-arrow-down"></i>
+                          {{ isSecondaryApiTesting ? '读取中' : '读取模型' }}
+                        </button>
+                        <button type="button" @click="clearSecondaryApiModel">
+                          <i class="fas fa-rotate-left"></i>
+                          清除模型
+                        </button>
+                      </div>
 
-                    <div class="settings-helper" :class="{ ready: secondaryApiReady }">
-                      {{ secondaryApiStatusText }}
-                      <span v-if="secondaryApiModelOptions.length === 0">
-                        请先点击“读取模型”，再从列表中选择调用模型。
-                      </span>
-                    </div>
-                  </section>
+                      <div class="settings-helper" :class="{ ready: secondaryApiReady }">
+                        {{ secondaryApiStatusText }}
+                        <span v-if="secondaryApiModelOptions.length === 0">
+                          请先点击“读取模型”，再从列表中选择调用模型。
+                        </span>
+                      </div>
+                    </section>
 
-                  <section class="settings-section settings-section-compact">
-                    <div class="settings-section-title">
-                      <span>后街聊天</span>
-                      <small>显示、生成与正文注入</small>
-                    </div>
+                    <section class="settings-section settings-section-compact">
+                      <div class="settings-section-title">
+                        <span>后街聊天</span>
+                        <small>显示、生成与正文注入</small>
+                      </div>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>窗口显示消息数</span>
-                        <strong>{{ phonePrefs.backstreetVisibleMessageCount }} 层</strong>
-                      </span>
-                      <input
-                        v-model.number="phonePrefs.backstreetVisibleMessageCount"
-                        type="range"
-                        min="5"
-                        max="100"
-                        step="1"
-                      />
-                    </label>
+                      <label class="settings-slider-row">
+                        <span>
+                          <span>窗口显示消息数</span>
+                          <strong>{{ phonePrefs.backstreetVisibleMessageCount }} 层</strong>
+                        </span>
+                        <input
+                          v-model.number="phonePrefs.backstreetVisibleMessageCount"
+                          type="range"
+                          min="5"
+                          max="100"
+                          step="1"
+                        />
+                      </label>
 
-                    <div class="settings-helper">
-                      只影响后街窗口首次显示数量；聊天顶部可继续加载更早消息。
-                    </div>
+                      <div class="settings-helper">只影响后街窗口首次显示数量；聊天顶部可继续加载更早消息。</div>
 
-                    <label class="settings-text-field">
-                      <span>联系人头像</span>
-                      <select v-model="phonePrefs.backstreetAvatarMode">
-                        <option value="chibi">默认 Q 版头像</option>
-                        <option value="normal">默认正常头像</option>
-                      </select>
-                    </label>
+                      <label class="settings-text-field">
+                        <span>联系人头像</span>
+                        <select v-model="phonePrefs.backstreetAvatarMode">
+                          <option value="chibi">默认 Q 版头像</option>
+                          <option value="normal">默认正常头像</option>
+                        </select>
+                      </label>
 
-                    <div class="settings-helper">
-                      没有 Q 版头像的联系人会自动使用正常头像；在后街联系人页点击头像可单独切换并记住该联系人。
-                    </div>
+                      <div class="settings-helper">
+                        没有 Q 版头像的联系人会自动使用正常头像；在后街联系人页点击头像可单独切换并记住该联系人。
+                      </div>
 
-                    <details class="settings-advanced-panel">
-                      <summary>
-                        <span>高级参数</span>
-                        <small>生成上下文、注入与模板</small>
-                      </summary>
+                      <details class="settings-advanced-panel">
+                        <summary>
+                          <span>高级参数</span>
+                          <small>生成上下文、注入与模板</small>
+                        </summary>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>生成读取正文楼层</span>
-                        <strong>{{ backstreetGeneration.mainRecentChatCount }} 层</strong>
-                      </span>
-                      <input v-model.number="backstreetGeneration.mainRecentChatCount" type="range" min="0" max="64" step="1" />
-                    </label>
-                    <p class="settings-param-help">从酒馆正文最近楼层中提取主线片段给后街参考。设为 0 时只保留时间、地点等主线快照。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>生成读取正文楼层</span>
+                            <strong>{{ backstreetGeneration.mainRecentChatCount }} 层</strong>
+                          </span>
+                          <input
+                            v-model.number="backstreetGeneration.mainRecentChatCount"
+                            type="range"
+                            min="0"
+                            max="64"
+                            step="1"
+                          />
+                        </label>
+                        <p class="settings-param-help">
+                          从酒馆正文最近楼层中提取主线片段给后街参考。设为 0 时只保留时间、地点等主线快照。
+                        </p>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>生成读取私聊历史</span>
-                        <strong>{{ backstreetGeneration.privateHistoryCount }} 条</strong>
-                      </span>
-                      <input v-model.number="backstreetGeneration.privateHistoryCount" type="range" min="0" max="120" step="1" />
-                    </label>
-                    <p class="settings-param-help">私聊回复时带入当前联系人最近多少条后街消息。数值越高越记得上下文，但请求会更长。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>生成读取私聊历史</span>
+                            <strong>{{ backstreetGeneration.privateHistoryCount }} 条</strong>
+                          </span>
+                          <input
+                            v-model.number="backstreetGeneration.privateHistoryCount"
+                            type="range"
+                            min="0"
+                            max="120"
+                            step="1"
+                          />
+                        </label>
+                        <p class="settings-param-help">
+                          私聊回复时带入当前联系人最近多少条后街消息。数值越高越记得上下文，但请求会更长。
+                        </p>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>生成读取群聊历史</span>
-                        <strong>{{ backstreetGeneration.groupHistoryCount }} 条</strong>
-                      </span>
-                      <input v-model.number="backstreetGeneration.groupHistoryCount" type="range" min="0" max="120" step="1" />
-                    </label>
-                    <p class="settings-param-help">群聊回复时带入当前群最近多少条消息。群聊成员多时可适当降低。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>生成读取群聊历史</span>
+                            <strong>{{ backstreetGeneration.groupHistoryCount }} 条</strong>
+                          </span>
+                          <input
+                            v-model.number="backstreetGeneration.groupHistoryCount"
+                            type="range"
+                            min="0"
+                            max="120"
+                            step="1"
+                          />
+                        </label>
+                        <p class="settings-param-help">群聊回复时带入当前群最近多少条消息。群聊成员多时可适当降低。</p>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>群聊成员上限</span>
-                        <strong>{{ backstreetGeneration.groupMemberLimit }} 人</strong>
-                      </span>
-                      <input v-model.number="backstreetGeneration.groupMemberLimit" type="range" min="1" max="80" step="1" />
-                    </label>
-                    <p class="settings-param-help">限制一次群聊生成最多识别多少名成员。超大群可降低以避免提示词过长。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>群聊成员上限</span>
+                            <strong>{{ backstreetGeneration.groupMemberLimit }} 人</strong>
+                          </span>
+                          <input
+                            v-model.number="backstreetGeneration.groupMemberLimit"
+                            type="range"
+                            min="1"
+                            max="80"
+                            step="1"
+                          />
+                        </label>
+                        <p class="settings-param-help">
+                          限制一次群聊生成最多识别多少名成员。超大群可降低以避免提示词过长。
+                        </p>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>群成员资料读取</span>
-                        <strong>{{ backstreetGeneration.groupLoreMemberCount }} 人</strong>
-                      </span>
-                      <input v-model.number="backstreetGeneration.groupLoreMemberCount" type="range" min="0" max="40" step="1" />
-                    </label>
-                    <p class="settings-param-help">为群聊前若干名成员读取白名单世界书资料。设为 0 时不额外读取成员资料。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>群成员资料读取</span>
+                            <strong>{{ backstreetGeneration.groupLoreMemberCount }} 人</strong>
+                          </span>
+                          <input
+                            v-model.number="backstreetGeneration.groupLoreMemberCount"
+                            type="range"
+                            min="0"
+                            max="40"
+                            step="1"
+                          />
+                        </label>
+                        <p class="settings-param-help">
+                          为群聊前若干名成员读取白名单世界书资料。设为 0 时不额外读取成员资料。
+                        </p>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>群成员私聊参考</span>
-                        <strong>{{ backstreetGeneration.groupMemberPrivateHistoryCount }} 条/人</strong>
-                      </span>
-                      <input
-                        v-model.number="backstreetGeneration.groupMemberPrivateHistoryCount"
-                        type="range"
-                        min="0"
-                        max="80"
-                        step="1"
-                      />
-                    </label>
-                    <p class="settings-param-help">群聊生成时参考群成员和玩家的近期私聊记录。用于保持私下关系，但默认不代表群内公开。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>群成员私聊参考</span>
+                            <strong>{{ backstreetGeneration.groupMemberPrivateHistoryCount }} 条/人</strong>
+                          </span>
+                          <input
+                            v-model.number="backstreetGeneration.groupMemberPrivateHistoryCount"
+                            type="range"
+                            min="0"
+                            max="80"
+                            step="1"
+                          />
+                        </label>
+                        <p class="settings-param-help">
+                          群聊生成时参考群成员和玩家的近期私聊记录。用于保持私下关系，但默认不代表群内公开。
+                        </p>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>私聊对象群聊参考</span>
-                        <strong>{{ backstreetGeneration.privateContactGroupHistoryCount }} 条/群</strong>
-                      </span>
-                      <input
-                        v-model.number="backstreetGeneration.privateContactGroupHistoryCount"
-                        type="range"
-                        min="0"
-                        max="80"
-                        step="1"
-                      />
-                    </label>
-                    <p class="settings-param-help">私聊生成时参考该联系人参与过的群聊内容。适合承接群里刚发生过的事。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>私聊对象群聊参考</span>
+                            <strong>{{ backstreetGeneration.privateContactGroupHistoryCount }} 条/群</strong>
+                          </span>
+                          <input
+                            v-model.number="backstreetGeneration.privateContactGroupHistoryCount"
+                            type="range"
+                            min="0"
+                            max="80"
+                            step="1"
+                          />
+                        </label>
+                        <p class="settings-param-help">
+                          私聊生成时参考该联系人参与过的群聊内容。适合承接群里刚发生过的事。
+                        </p>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>私聊参考群数量</span>
-                        <strong>{{ backstreetGeneration.privateContactGroupThreadCount }} 个</strong>
-                      </span>
-                      <input
-                        v-model.number="backstreetGeneration.privateContactGroupThreadCount"
-                        type="range"
-                        min="0"
-                        max="30"
-                        step="1"
-                      />
-                    </label>
-                    <p class="settings-param-help">限制私聊生成最多参考多少个相关群聊。数值越高，跨群记忆越多。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>私聊参考群数量</span>
+                            <strong>{{ backstreetGeneration.privateContactGroupThreadCount }} 个</strong>
+                          </span>
+                          <input
+                            v-model.number="backstreetGeneration.privateContactGroupThreadCount"
+                            type="range"
+                            min="0"
+                            max="30"
+                            step="1"
+                          />
+                        </label>
+                        <p class="settings-param-help">限制私聊生成最多参考多少个相关群聊。数值越高，跨群记忆越多。</p>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>私聊记忆检索</span>
-                        <strong>{{ backstreetGeneration.privateArchiveMemoryCount }} 条</strong>
-                      </span>
-                      <input
-                        v-model.number="backstreetGeneration.privateArchiveMemoryCount"
-                        type="range"
-                        min="0"
-                        max="30"
-                        step="1"
-                      />
-                    </label>
-                    <p class="settings-param-help">从归档后街记忆中检索私聊相关记录。用于找回较早的承诺、暗号或关系进展。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>私聊记忆检索</span>
+                            <strong>{{ backstreetGeneration.privateArchiveMemoryCount }} 条</strong>
+                          </span>
+                          <input
+                            v-model.number="backstreetGeneration.privateArchiveMemoryCount"
+                            type="range"
+                            min="0"
+                            max="30"
+                            step="1"
+                          />
+                        </label>
+                        <p class="settings-param-help">
+                          从归档后街记忆中检索私聊相关记录。用于找回较早的承诺、暗号或关系进展。
+                        </p>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>群聊记忆检索</span>
-                        <strong>{{ backstreetGeneration.groupArchiveMemoryCount }} 条</strong>
-                      </span>
-                      <input
-                        v-model.number="backstreetGeneration.groupArchiveMemoryCount"
-                        type="range"
-                        min="0"
-                        max="30"
-                        step="1"
-                      />
-                    </label>
-                    <p class="settings-param-help">从归档后街记忆中检索群聊相关记录。用于让群聊接上更早的话题。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>群聊记忆检索</span>
+                            <strong>{{ backstreetGeneration.groupArchiveMemoryCount }} 条</strong>
+                          </span>
+                          <input
+                            v-model.number="backstreetGeneration.groupArchiveMemoryCount"
+                            type="range"
+                            min="0"
+                            max="30"
+                            step="1"
+                          />
+                        </label>
+                        <p class="settings-param-help">从归档后街记忆中检索群聊相关记录。用于让群聊接上更早的话题。</p>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>单次发送图片上限</span>
-                        <strong>{{ backstreetGeneration.maxUserImagesPerSend }} 张</strong>
-                      </span>
-                      <input v-model.number="backstreetGeneration.maxUserImagesPerSend" type="range" min="0" max="8" step="1" />
-                    </label>
-                    <p class="settings-param-help">限制玩家一次能发送几张图片。设为 0 时禁止发送图片。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>单次发送图片上限</span>
+                            <strong>{{ backstreetGeneration.maxUserImagesPerSend }} 张</strong>
+                          </span>
+                          <input
+                            v-model.number="backstreetGeneration.maxUserImagesPerSend"
+                            type="range"
+                            min="0"
+                            max="8"
+                            step="1"
+                          />
+                        </label>
+                        <p class="settings-param-help">限制玩家一次能发送几张图片。设为 0 时禁止发送图片。</p>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>请求携带用户图片</span>
-                        <strong>{{ backstreetGeneration.maxUserImagesInPrompt }} 张</strong>
-                      </span>
-                      <input v-model.number="backstreetGeneration.maxUserImagesInPrompt" type="range" min="0" max="8" step="1" />
-                    </label>
-                    <p class="settings-param-help">生成回复时实际随请求发送的最近用户图片数量。模型或接口不支持视觉时建议设为 0。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>请求携带用户图片</span>
+                            <strong>{{ backstreetGeneration.maxUserImagesInPrompt }} 张</strong>
+                          </span>
+                          <input
+                            v-model.number="backstreetGeneration.maxUserImagesInPrompt"
+                            type="range"
+                            min="0"
+                            max="8"
+                            step="1"
+                          />
+                        </label>
+                        <p class="settings-param-help">
+                          生成回复时实际随请求发送的最近用户图片数量。模型或接口不支持视觉时建议设为 0。
+                        </p>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>后街输出上限</span>
-                        <strong>{{ backstreetGeneration.maxOutputTokens }} tokens</strong>
-                      </span>
-                      <input v-model.number="backstreetGeneration.maxOutputTokens" type="range" min="256" max="8192" step="128" />
-                    </label>
-                    <p class="settings-param-help">限制后街生成回复的最大输出长度。太低可能截断格式，太高会增加等待时间。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>后街输出上限</span>
+                            <strong>{{ backstreetGeneration.maxOutputTokens }} tokens</strong>
+                          </span>
+                          <input
+                            v-model.number="backstreetGeneration.maxOutputTokens"
+                            type="range"
+                            min="256"
+                            max="8192"
+                            step="128"
+                          />
+                        </label>
+                        <p class="settings-param-help">
+                          限制后街生成回复的最大输出长度。太低可能截断格式，太高会增加等待时间。
+                        </p>
 
-                    <label class="settings-textarea-field">
-                      <span>私聊系统提示词模板</span>
-                      <textarea v-model="backstreetGeneration.privateSystemPromptTemplate" rows="9"></textarea>
-                    </label>
-                    <p class="settings-param-help">控制私聊角色如何说话、遵守什么格式。保留变量占位符可让系统自动插入规则和输出格式。</p>
+                        <label class="settings-textarea-field">
+                          <span>私聊系统提示词模板</span>
+                          <textarea v-model="backstreetGeneration.privateSystemPromptTemplate" rows="9"></textarea>
+                        </label>
+                        <p class="settings-param-help">
+                          控制私聊角色如何说话、遵守什么格式。保留变量占位符可让系统自动插入规则和输出格式。
+                        </p>
 
-                    <label class="settings-textarea-field">
-                      <span>群聊系统提示词模板</span>
-                      <textarea v-model="backstreetGeneration.groupSystemPromptTemplate" rows="9"></textarea>
-                    </label>
-                    <p class="settings-param-help">控制群聊成员发言、speaker 规则和群聊语气。修改后会影响所有群聊生成。</p>
+                        <label class="settings-textarea-field">
+                          <span>群聊系统提示词模板</span>
+                          <textarea v-model="backstreetGeneration.groupSystemPromptTemplate" rows="9"></textarea>
+                        </label>
+                        <p class="settings-param-help">
+                          控制群聊成员发言、speaker 规则和群聊语气。修改后会影响所有群聊生成。
+                        </p>
 
-                    <div class="settings-actions">
-                      <button type="button" @click="resetBackstreetGenerationTemplates">
-                        <i class="fas fa-rotate-left"></i>
-                        恢复后街模板
-                      </button>
-                    </div>
+                        <div class="settings-actions">
+                          <button type="button" @click="resetBackstreetGenerationTemplates">
+                            <i class="fas fa-rotate-left"></i>
+                            恢复后街模板
+                          </button>
+                        </div>
 
-                    <div class="settings-helper" v-pre>
-                      可用变量：{{contact}}、{{group_name}}、{{members}}、{{player_name}}、{{adult_rules}}、{{illustration_instruction}}、{{output_schema}}。
-                    </div>
+                        <div class="settings-helper" v-pre>
+                          可用变量：{{ contact }}、{{ group_name }}、{{ members }}、{{ player_name }}、{{
+                            adult_rules
+                          }}、{{ illustration_instruction }}、{{ output_schema }}。
+                        </div>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>在场私聊注入</span>
-                        <strong>{{ phonePrefs.backstreetPresentPrivateMessageCount }} 条/人</strong>
-                      </span>
-                      <input
-                        v-model.number="phonePrefs.backstreetPresentPrivateMessageCount"
-                        type="range"
-                        min="0"
-                        max="30"
-                        step="1"
-                      />
-                    </label>
-                    <p class="settings-param-help">正文生成时，把当前在场人物相关私聊注入给主线参考。它不影响后街聊天窗口显示。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>在场私聊注入</span>
+                            <strong>{{ phonePrefs.backstreetPresentPrivateMessageCount }} 条/人</strong>
+                          </span>
+                          <input
+                            v-model.number="phonePrefs.backstreetPresentPrivateMessageCount"
+                            type="range"
+                            min="0"
+                            max="30"
+                            step="1"
+                          />
+                        </label>
+                        <p class="settings-param-help">
+                          正文生成时，把当前在场人物相关私聊注入给主线参考。它不影响后街聊天窗口显示。
+                        </p>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>在场群聊注入</span>
-                        <strong>{{ phonePrefs.backstreetPresentGroupMessageCount }} 条/群</strong>
-                      </span>
-                      <input
-                        v-model.number="phonePrefs.backstreetPresentGroupMessageCount"
-                        type="range"
-                        min="0"
-                        max="30"
-                        step="1"
-                      />
-                    </label>
-                    <p class="settings-param-help">正文生成时，把包含在场人物的群聊记录注入给主线参考。适合让正文记住群聊承诺和公开信息。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>在场群聊注入</span>
+                            <strong>{{ phonePrefs.backstreetPresentGroupMessageCount }} 条/群</strong>
+                          </span>
+                          <input
+                            v-model.number="phonePrefs.backstreetPresentGroupMessageCount"
+                            type="range"
+                            min="0"
+                            max="30"
+                            step="1"
+                          />
+                        </label>
+                        <p class="settings-param-help">
+                          正文生成时，把包含在场人物的群聊记录注入给主线参考。适合让正文记住群聊承诺和公开信息。
+                        </p>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>全局最近注入</span>
-                        <strong>{{ phonePrefs.backstreetGlobalRecentMessageCount }} 条</strong>
-                      </span>
-                      <input
-                        v-model.number="phonePrefs.backstreetGlobalRecentMessageCount"
-                        type="range"
-                        min="0"
-                        max="50"
-                        step="1"
-                      />
-                    </label>
-                    <p class="settings-param-help">正文生成时额外注入最近后街记录，不要求相关角色在场。数值过高会增加正文提示词长度。</p>
+                        <label class="settings-slider-row">
+                          <span>
+                            <span>全局最近注入</span>
+                            <strong>{{ phonePrefs.backstreetGlobalRecentMessageCount }} 条</strong>
+                          </span>
+                          <input
+                            v-model.number="phonePrefs.backstreetGlobalRecentMessageCount"
+                            type="range"
+                            min="0"
+                            max="50"
+                            step="1"
+                          />
+                        </label>
+                        <p class="settings-param-help">
+                          正文生成时额外注入最近后街记录，不要求相关角色在场。数值过高会增加正文提示词长度。
+                        </p>
 
-                    <div class="settings-helper">
-                      在场私聊：当前在场角色各自的最近私聊；在场群聊：群成员包含在场角色的群聊；全局最近：不要求角色在场。
-                    </div>
-                    </details>
-                  </section>
-
+                        <div class="settings-helper">
+                          在场私聊：当前在场角色各自的最近私聊；在场群聊：群成员包含在场角色的群聊；全局最近：不要求角色在场。
+                        </div>
+                      </details>
+                    </section>
                   </details>
 
                   <details class="settings-category-panel" open>
                     <summary class="settings-category-heading">
-                    <span>生图设置</span>
-                    <small>NovelAI 插图</small>
+                      <span>生图设置</span>
+                      <small>NovelAI 插图</small>
                     </summary>
 
-                  <section class="settings-section">
-                    <div class="settings-section-title">
-                      <span>NovelAI 生图</span>
-                      <small>后街插图</small>
-                    </div>
+                    <section class="settings-section">
+                      <div class="settings-section-title">
+                        <span>NovelAI 生图</span>
+                        <small>后街插图</small>
+                      </div>
 
-                    <label class="settings-row">
-                      <span class="settings-row-icon"><i class="fas fa-wand-magic-sparkles"></i></span>
-                      <span class="settings-row-label">启用 NovelAI 生图</span>
-                      <input v-model="novelAiImage.enabled" class="settings-toggle" type="checkbox" />
-                    </label>
+                      <label class="settings-row">
+                        <span class="settings-row-icon"><i class="fas fa-wand-magic-sparkles"></i></span>
+                        <span class="settings-row-label">启用 NovelAI 生图</span>
+                        <input v-model="novelAiImage.enabled" class="settings-toggle" type="checkbox" />
+                      </label>
 
-                    <label class="settings-text-field">
-                      <span>接口地址</span>
-                      <input
-                        v-model.trim="novelAiImage.apiBaseUrl"
-                        type="text"
-                        placeholder="https://image.novelai.net"
-                      />
-                    </label>
+                      <label class="settings-text-field">
+                        <span>接口地址</span>
+                        <input
+                          v-model.trim="novelAiImage.apiBaseUrl"
+                          type="text"
+                          placeholder="https://image.novelai.net"
+                        />
+                      </label>
 
-                    <label class="settings-text-field">
-                      <span>API Key</span>
-                      <input v-model.trim="novelAiImage.apiKey" type="password" placeholder="NovelAI Persistent API token" />
-                    </label>
+                      <label class="settings-text-field">
+                        <span>API Key</span>
+                        <input
+                          v-model.trim="novelAiImage.apiKey"
+                          type="password"
+                          placeholder="NovelAI Persistent API token"
+                        />
+                      </label>
 
-                    <label class="settings-row">
-                      <span class="settings-row-icon"><i class="fas fa-microchip"></i></span>
-                      <span class="settings-row-label">模型</span>
-                      <select :value="novelAiImage.model" @change="handleNovelAiImageModelChange">
-                        <option v-for="model in NOVELAI_IMAGE_MODEL_OPTIONS" :key="model" :value="model">
-                          {{ model }}
-                        </option>
-                      </select>
-                    </label>
+                      <label class="settings-row">
+                        <span class="settings-row-icon"><i class="fas fa-microchip"></i></span>
+                        <span class="settings-row-label">模型</span>
+                        <select :value="novelAiImage.model" @change="handleNovelAiImageModelChange">
+                          <option v-for="model in NOVELAI_IMAGE_MODEL_OPTIONS" :key="model" :value="model">
+                            {{ model }}
+                          </option>
+                        </select>
+                      </label>
 
-                    <label class="settings-row">
-                      <span class="settings-row-icon"><i class="fas fa-crop-simple"></i></span>
-                      <span class="settings-row-label">图片尺寸</span>
-                      <select v-model="novelAiImage.sizePreset">
-                        <option v-for="size in NOVELAI_IMAGE_SIZE_OPTIONS" :key="size.value" :value="size.value">
-                          {{ size.label }}
-                        </option>
-                      </select>
-                    </label>
+                      <label class="settings-row">
+                        <span class="settings-row-icon"><i class="fas fa-crop-simple"></i></span>
+                        <span class="settings-row-label">图片尺寸</span>
+                        <select v-model="novelAiImage.sizePreset">
+                          <option v-for="size in NOVELAI_IMAGE_SIZE_OPTIONS" :key="size.value" :value="size.value">
+                            {{ size.label }}
+                          </option>
+                        </select>
+                      </label>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>生成步数</span>
-                        <strong>{{ novelAiImage.steps }}</strong>
-                      </span>
-                      <input v-model.number="novelAiImage.steps" type="range" min="1" max="28" step="1" />
-                    </label>
+                      <label class="settings-slider-row">
+                        <span>
+                          <span>生成步数</span>
+                          <strong>{{ novelAiImage.steps }}</strong>
+                        </span>
+                        <input v-model.number="novelAiImage.steps" type="range" min="1" max="28" step="1" />
+                      </label>
 
-                    <label class="settings-slider-row">
-                      <span>
-                        <span>提示词引导强度</span>
-                        <strong>{{ novelAiImage.scale }}</strong>
-                      </span>
-                      <input
-                        v-model.number="novelAiImage.scale"
-                        type="range"
-                        min="1"
-                        :max="NOVELAI_IMAGE_SCALE_MAX"
-                        step="0.5"
-                      />
-                    </label>
+                      <label class="settings-slider-row">
+                        <span>
+                          <span>提示词引导强度</span>
+                          <strong>{{ novelAiImage.scale }}</strong>
+                        </span>
+                        <input
+                          v-model.number="novelAiImage.scale"
+                          type="range"
+                          min="1"
+                          :max="NOVELAI_IMAGE_SCALE_MAX"
+                          step="0.5"
+                        />
+                      </label>
 
-                    <label class="settings-textarea-field">
-                      <span>正面提示词前缀</span>
-                      <textarea v-model="novelAiImage.positivePromptPrefix" rows="3"></textarea>
-                    </label>
+                      <label class="settings-textarea-field">
+                        <span>正面提示词前缀</span>
+                        <textarea v-model="novelAiImage.positivePromptPrefix" rows="3"></textarea>
+                      </label>
 
-                    <label class="settings-textarea-field">
-                      <span>负向提示词</span>
-                      <textarea v-model="novelAiImage.negativePrompt" rows="4"></textarea>
-                    </label>
+                      <label class="settings-textarea-field">
+                        <span>负向提示词</span>
+                        <textarea v-model="novelAiImage.negativePrompt" rows="4"></textarea>
+                      </label>
 
-                    <label class="settings-textarea-field">
-                      <span>插图提示词模板</span>
-                      <textarea v-model="novelAiImage.promptTemplate" rows="9"></textarea>
-                    </label>
+                      <label class="settings-textarea-field">
+                        <span>插图提示词模板</span>
+                        <textarea v-model="novelAiImage.promptTemplate" rows="9"></textarea>
+                      </label>
 
-                    <div class="settings-actions">
-                      <button
-                        class="settings-action-primary"
-                        type="button"
-                        :disabled="isNovelAiImageTesting"
-                        @click="handleTestNovelAiImage"
-                      >
-                        <i class="fas fa-plug-circle-check"></i>
-                        {{ isNovelAiImageTesting ? '测试中' : '测试连接' }}
-                      </button>
-                      <button type="button" @click="resetNovelAiImageTemplate">
-                        <i class="fas fa-rotate-left"></i>
-                        恢复模板
-                      </button>
-                    </div>
+                      <div class="settings-actions">
+                        <button
+                          class="settings-action-primary"
+                          type="button"
+                          :disabled="isNovelAiImageTesting"
+                          @click="handleTestNovelAiImage"
+                        >
+                          <i class="fas fa-plug-circle-check"></i>
+                          {{ isNovelAiImageTesting ? '测试中' : '测试连接' }}
+                        </button>
+                        <button type="button" @click="resetNovelAiImageTemplate">
+                          <i class="fas fa-rotate-left"></i>
+                          恢复模板
+                        </button>
+                      </div>
 
-                    <div class="settings-helper" :class="{ ready: novelAiImageReady }">
-                      {{ novelAiImageStatusText }}
-                    </div>
-                  </section>
-
+                      <div class="settings-helper" :class="{ ready: novelAiImageReady }">
+                        {{ novelAiImageStatusText }}
+                      </div>
+                    </section>
                   </details>
 
                   <div class="settings-category-heading">
@@ -783,7 +882,12 @@
                     </div>
 
                     <div class="settings-actions">
-                      <button class="settings-action-primary" type="button" :disabled="!canResetSelectedSettings" @click="resetSelectedSettings">
+                      <button
+                        class="settings-action-primary"
+                        type="button"
+                        :disabled="!canResetSelectedSettings"
+                        @click="resetSelectedSettings"
+                      >
                         <i class="fas fa-rotate-left"></i>
                         恢复所选默认
                       </button>
@@ -859,19 +963,7 @@ import {
   saveIndexedImageBlob,
   saveIndexedImageDataUrl,
 } from '../../shared/indexedImageStore';
-import { getLatestMvuData, replaceLatestMvuData } from '../../shared/mvuStore';
-import { syncXiaoyeyueLightDarkStatusBonus } from '../../shared/xiaoyeyueMagicGirl';
-import { getDailyTalentEffect } from '../data/talentDatabase';
-import BackstreetPage from './pages/BackstreetPage.vue';
-import CGPage from './pages/CGPage.vue';
-import DashboardPage from './pages/DashboardPage.vue';
-import InventoryPage from './pages/InventoryPage.vue';
-import MapPage from './pages/MapPage.vue';
-import ProfilePage from './pages/ProfilePage.vue';
-import QuestPage from './pages/QuestPage.vue';
-import RelationshipPage from './pages/RelationshipPage.vue';
-import ShopPage from './pages/ShopPage.vue';
-import SkillPage from './pages/SkillPage.vue';
+import { getLatestMvuData } from '../../shared/mvuStore';
 import {
   DEFAULT_SECONDARY_PHONE_API_SETTINGS,
   fetchSecondaryPhoneApiModels,
@@ -910,6 +1002,16 @@ import {
   showScriptUpdateGuide,
   type ScriptUpdateState,
 } from '../scriptUpdater';
+import BackstreetPage from './pages/BackstreetPage.vue';
+import CGPage from './pages/CGPage.vue';
+import DashboardPage from './pages/DashboardPage.vue';
+import InventoryPage from './pages/InventoryPage.vue';
+import MapPage from './pages/MapPage.vue';
+import ProfilePage from './pages/ProfilePage.vue';
+import QuestPage from './pages/QuestPage.vue';
+import RelationshipPage from './pages/RelationshipPage.vue';
+import ShopPage from './pages/ShopPage.vue';
+import SkillPage from './pages/SkillPage.vue';
 
 const props = defineProps<{
   isVisible: boolean;
@@ -998,11 +1100,18 @@ const LAUNCHER_STYLE_OPTIONS = [
   { value: 'holo-chip', label: '全息' },
 ] as const;
 
+const PHONE_VISUAL_MODE_OPTIONS = [
+  { value: 'auto', label: '自动（移动端简化）' },
+  { value: 'full', label: '完整效果' },
+  { value: 'lite', label: '简化效果' },
+] as const;
+
 type PhoneTheme = (typeof PHONE_THEME_OPTIONS)[number]['value'];
 type PhoneFont = (typeof PHONE_FONT_OPTIONS)[number]['value'];
 type AppIconStyle = (typeof APP_ICON_STYLE_OPTIONS)[number]['value'];
 type LauncherStyle = (typeof LAUNCHER_STYLE_OPTIONS)[number]['value'];
 type WallpaperPreset = (typeof WALLPAPER_PRESETS)[number]['value'];
+type PhoneVisualMode = (typeof PHONE_VISUAL_MODE_OPTIONS)[number]['value'];
 
 const PHONE_FONT_FAMILIES: Record<PhoneFont, string> = {
   system: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif',
@@ -1022,6 +1131,7 @@ interface PhonePreferences {
   wallpaperOpacity: number;
   wallpaperBlur: number;
   tintStrength: number;
+  visualMode: PhoneVisualMode;
   backstreetVisibleMessageCount: number;
   backstreetAvatarMode: BackstreetAvatarMode;
   backstreetPresentPrivateMessageCount: number;
@@ -1066,6 +1176,7 @@ const DEFAULT_PHONE_PREFS: PhonePreferences = {
   wallpaperOpacity: 70,
   wallpaperBlur: 0,
   tintStrength: 15,
+  visualMode: 'auto',
   backstreetVisibleMessageCount: 30,
   backstreetAvatarMode: DEFAULT_BACKSTREET_AVATAR_MODE,
   backstreetPresentPrivateMessageCount: 20,
@@ -1123,6 +1234,7 @@ const phoneFrameClasses = computed(() => [
   `theme-${phonePrefs.value.theme}`,
   `icon-style-${phonePrefs.value.appIconStyle}`,
 ]);
+const isLiteVisuals = computed(() => shouldUseLiteVisuals(phonePrefs.value.visualMode));
 const wallpaperLayerStyle = computed(() => ({
   backgroundImage: getWallpaperPresetBackground(phonePrefs.value.wallpaperPreset),
 }));
@@ -1137,14 +1249,13 @@ const phoneStyle = computed(() => {
 const phonePositionStyle = computed(() => ({
   transform: `translate3d(${phonePosition.value.x}px, ${phonePosition.value.y}px, 0)`,
 }));
-const secondaryApiReady = computed(
-  () =>
-    Boolean(
-      secondaryPhoneApi.value.enabled &&
-        secondaryPhoneApi.value.baseUrl.trim() &&
-        secondaryPhoneApi.value.model.trim() &&
-        secondaryApiModelOptions.value.includes(secondaryPhoneApi.value.model),
-    ),
+const secondaryApiReady = computed(() =>
+  Boolean(
+    secondaryPhoneApi.value.enabled &&
+    secondaryPhoneApi.value.baseUrl.trim() &&
+    secondaryPhoneApi.value.model.trim() &&
+    secondaryApiModelOptions.value.includes(secondaryPhoneApi.value.model),
+  ),
 );
 const secondaryApiStatusText = computed(() => {
   if (secondaryApiStatus.value) return secondaryApiStatus.value;
@@ -1161,9 +1272,7 @@ const novelAiImageStatusText = computed(() => {
   return '关闭时后街只显示文字消息；接口地址与 API Key 会保存在本地浏览器。';
 });
 const hasScriptUpdate = computed(() => scriptUpdateState.value.hasUpdate);
-const scriptUpdateHelperReady = computed(
-  () => scriptUpdateState.value.status === 'latest',
-);
+const scriptUpdateHelperReady = computed(() => scriptUpdateState.value.status === 'latest');
 const scriptUpdateStatusText = computed(() => {
   if (scriptUpdateState.value.status === 'available') {
     return `${scriptUpdateState.value.message}本功能只提示处理方法，不会改写角色卡脚本内容。`;
@@ -1218,7 +1327,10 @@ watch(
   () => props.isVisible,
   isVisible => {
     if (!isVisible) return;
-    window.requestAnimationFrame(() => applyPhonePosition(phonePosition.value));
+    const hostWindow = getPhoneHostWindow();
+    hostWindow.requestAnimationFrame(() => applyPhonePosition(phonePosition.value));
+    measurePhoneOpenFirstFrame();
+    void refreshPhoneData('打开手机');
   },
   { flush: 'post' },
 );
@@ -1413,6 +1525,25 @@ function isWallpaperPreset(value: unknown): value is WallpaperPreset {
   return WALLPAPER_PRESETS.some(option => option.value === value);
 }
 
+function isPhoneVisualMode(value: unknown): value is PhoneVisualMode {
+  return PHONE_VISUAL_MODE_OPTIONS.some(option => option.value === value);
+}
+
+function shouldUseLiteVisuals(mode: PhoneVisualMode): boolean {
+  if (mode === 'lite') return true;
+  if (mode === 'full') return false;
+
+  const hostWindow = getPhoneHostWindow();
+  const navigatorWithMemory = hostWindow.navigator as Navigator & { deviceMemory?: number };
+  const prefersReducedMotion = hostWindow.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  const coarsePointer = hostWindow.matchMedia?.('(pointer: coarse)').matches ?? false;
+  const lowMemory = typeof navigatorWithMemory.deviceMemory === 'number' && navigatorWithMemory.deviceMemory <= 4;
+  const lowConcurrency =
+    typeof navigatorWithMemory.hardwareConcurrency === 'number' && navigatorWithMemory.hardwareConcurrency <= 4;
+
+  return prefersReducedMotion || coarsePointer || lowMemory || lowConcurrency;
+}
+
 function getWallpaperPresetBackground(preset: WallpaperPreset): string {
   return WALLPAPER_PRESETS.find(option => option.value === preset)?.background ?? WALLPAPER_PRESETS[0].background;
 }
@@ -1428,12 +1559,11 @@ function loadPhonePreferences(): PhonePreferences {
       ? parsed.wallpaperPreset
       : DEFAULT_PHONE_PREFS.wallpaperPreset;
     const fontFamily = isPhoneFont(parsed.fontFamily) ? parsed.fontFamily : DEFAULT_PHONE_PREFS.fontFamily;
-    const appIconStyle = isAppIconStyle(parsed.appIconStyle)
-      ? parsed.appIconStyle
-      : DEFAULT_PHONE_PREFS.appIconStyle;
+    const appIconStyle = isAppIconStyle(parsed.appIconStyle) ? parsed.appIconStyle : DEFAULT_PHONE_PREFS.appIconStyle;
     const launcherStyle = isLauncherStyle(parsed.launcherStyle)
       ? parsed.launcherStyle
       : DEFAULT_PHONE_PREFS.launcherStyle;
+    const visualMode = isPhoneVisualMode(parsed.visualMode) ? parsed.visualMode : DEFAULT_PHONE_PREFS.visualMode;
 
     return {
       wallpaperUrl: typeof parsed.wallpaperUrl === 'string' ? parsed.wallpaperUrl : DEFAULT_PHONE_PREFS.wallpaperUrl,
@@ -1445,6 +1575,7 @@ function loadPhonePreferences(): PhonePreferences {
       wallpaperOpacity: clampNumber(Number(parsed.wallpaperOpacity), 20, 100),
       wallpaperBlur: clampNumber(Number(parsed.wallpaperBlur), 0, 16),
       tintStrength: clampNumber(Number(parsed.tintStrength), 0, 70),
+      visualMode,
       backstreetVisibleMessageCount: clampNumber(
         Number(parsed.backstreetVisibleMessageCount ?? DEFAULT_PHONE_PREFS.backstreetVisibleMessageCount),
         5,
@@ -1578,6 +1709,7 @@ function resetDisplaySettings() {
     wallpaperOpacity: DEFAULT_PHONE_PREFS.wallpaperOpacity,
     wallpaperBlur: DEFAULT_PHONE_PREFS.wallpaperBlur,
     tintStrength: DEFAULT_PHONE_PREFS.tintStrength,
+    visualMode: DEFAULT_PHONE_PREFS.visualMode,
   };
   if (isIndexedImageRef(previousWallpaperUrl)) {
     void deleteIndexedImage(previousWallpaperUrl);
@@ -1810,237 +1942,122 @@ async function prepareWallpaperBlob(file: File): Promise<Blob> {
   }
 }
 
-/**
- * 规范化名字：去除中间点等特殊字符
- * 例如："雪莉·克里姆希尔德" -> "雪莉克里姆希尔德"
- * @param name 原始名称
- * @returns 去除特殊字符后的名称
- */
-function normalizeName(name: string): string {
-  // 去除中间点（·、・、‧等变体）
-  return name.replace(/[·・‧]/g, '');
-}
+function updatePhoneState(statData: Record<string, any>) {
+  characterData.value = statData;
+  combatData.value = statData;
 
-// 从 MVU 获取数据
-async function loadMvuData() {
-  try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) {
-      console.warn('[状态栏] MVU数据为空');
-      return;
-    }
+  const timeData = statData.时间系统;
+  const locationData = statData.位置系统;
 
-    // ==================== 规范化关系系统中的名字 ====================
-    let needsUpdate = false;
-    const relationships = mvuData.stat_data.关系系统 as Record<string, any> | undefined;
-
-    if (relationships && typeof relationships === 'object') {
-      const keysToNormalize: { oldKey: string; newKey: string }[] = [];
-
-      // 遍历关系系统的所有键（人物名字）
-      for (const key of Object.keys(relationships)) {
-        // 跳过非人物键（如在场人物数组）
-        if (key === '在场人物') continue;
-
-        const normalizedKey = normalizeName(key);
-        // 如果名字包含中间点，需要规范化
-        if (normalizedKey !== key) {
-          keysToNormalize.push({ oldKey: key, newKey: normalizedKey });
-        }
-      }
-
-      // 如果有需要规范化的名字
-      if (keysToNormalize.length > 0) {
-        for (const { oldKey, newKey } of keysToNormalize) {
-          // 如果规范化后的键已存在，合并数据（保留更高的好感度）
-          if (relationships[newKey]) {
-            const oldData = relationships[oldKey];
-            const existingData = relationships[newKey];
-            // 保留好感度更高的关系数据
-            if ((oldData?.好感度 || 0) > (existingData?.好感度 || 0)) {
-              relationships[newKey] = oldData;
-            }
-          } else {
-            // 直接使用规范化后的键
-            relationships[newKey] = relationships[oldKey];
-          }
-          // 删除旧键
-          delete relationships[oldKey];
-          console.info(`[状态栏] 关系系统名字规范化: "${oldKey}" → "${newKey}"`);
-        }
-        needsUpdate = true;
-      }
-
-      // 同时规范化在场人物数组中的名字
-      const presentCharacters = relationships['在场人物'] as string[] | undefined;
-      if (Array.isArray(presentCharacters)) {
-        const normalizedCharacters = presentCharacters.map((name: string) => normalizeName(name));
-        // 检查是否有变化
-        const hasChange = presentCharacters.some((name: string, i: number) => name !== normalizedCharacters[i]);
-        if (hasChange) {
-          relationships['在场人物'] = normalizedCharacters;
-          console.info(
-            `[状态栏] 在场人物名字规范化: ${presentCharacters.join(', ')} → ${normalizedCharacters.join(', ')}`,
-          );
-          needsUpdate = true;
-        }
-      }
-    }
-
-    if (syncXiaoyeyueLightDarkStatusBonus(mvuData.stat_data)) {
-      needsUpdate = true;
-      console.info('[状态栏] 已同步光与暗交融的魔法少女动态加成');
-    }
-
-    // 如果有变更，写回 MVU
-    if (needsUpdate) {
-      await replaceLatestMvuData(mvuData);
-      console.info('[状态栏] 已更新规范化后的关系系统数据');
-    }
-
-    characterData.value = mvuData.stat_data;
-    combatData.value = mvuData.stat_data;
-
-    // 检查是否需要自动升级
-    await checkAutoLevelUp(mvuData);
-  } catch (error) {
-    console.error('[状态栏] 加载 MVU 数据失败:', error);
-  }
-}
-
-// 自动升级检查
-async function checkAutoLevelUp(mvuData: any) {
-  try {
-    const statData = mvuData.stat_data;
-
-    // 获取当前经验值、等级和潜力
-    const currentExp = statData.角色基础?.经验值 || 0;
-    const currentLevel = statData.角色基础?._等级 || 1;
-    const potential = statData.核心状态?._潜力 || 5.0; // 潜力值 (5.0-10.0)
-    const difficulty = statData.角色基础?.难度 || '普通';
-
-    // 检查天赋：经验降低效果
-    const talents = statData.技能系统?.$天赋;
-    const currentTalentId = talents && Object.keys(talents).length > 0 ? Object.keys(talents)[0] : undefined;
-    const expReduction = getDailyTalentEffect(currentTalentId, 'exp_reduce'); // 百分比
-
-    // 每100经验值升一级（根据难度和天赋调整）
-    const baseExpNeeded = (() => {
-      switch (difficulty) {
-        case '简单':
-          return 100;
-        case '普通':
-          return 125;
-        case '困难':
-          return 150;
-        case '抖M':
-          return 200;
-        case '作弊':
-          return 100;
-        default:
-          return 125;
-      }
-    })();
-
-    // 应用经验降低天赋效果
-    const expNeeded = Math.max(50, Math.floor((baseExpNeeded * (100 - expReduction)) / 100));
-
-    // 检查是否可以升级（最高100级）
-    if (currentExp >= expNeeded && currentLevel < 100) {
-      // 计算升级次数和剩余经验
-      const levelsGained = Math.floor(currentExp / expNeeded);
-      const newLevel = Math.min(100, currentLevel + levelsGained);
-      const actualLevelsGained = newLevel - currentLevel;
-      const remainingExp = currentExp - actualLevelsGained * expNeeded;
-
-      if (actualLevelsGained > 0) {
-        // 升级奖励：根据潜力计算，每级获得 floor(潜力/2) 点（属性点和技能点相同）
-        const attributePointsPerLevel = Math.floor(potential / 2);
-        const skillPointsPerLevel = Math.floor(potential);
-        let attributePointsGained = actualLevelsGained * attributePointsPerLevel;
-        let skillPointsGained = actualLevelsGained * skillPointsPerLevel;
-
-        // 天赋：升级时额外获得属性点（使用之前已获取的currentTalentId）
-        const extraStatPoints = getDailyTalentEffect(currentTalentId, 'extra_stat_point') * actualLevelsGained;
-        attributePointsGained += extraStatPoints;
-
-        // 天赋：升级时额外获得技能点
-        const extraSkillPoints = getDailyTalentEffect(currentTalentId, 'extra_skill_point') * actualLevelsGained;
-        skillPointsGained += extraSkillPoints;
-
-        // 更新 MVU 数据
-        if (!statData.角色基础) statData.角色基础 = {};
-        if (!statData.核心状态) statData.核心状态 = {};
-
-        statData.角色基础._等级 = newLevel;
-        statData.角色基础.经验值 = remainingExp;
-        statData.核心状态.$属性点 = (statData.核心状态.$属性点 || 0) + attributePointsGained;
-        statData.核心状态.$技能点 = (statData.核心状态.$技能点 || 0) + skillPointsGained;
-
-        // 升级不再自动增加属性，只增加属性点和技能点让用户自由分配
-
-        // 写回 MVU
-        await replaceLatestMvuData(mvuData);
-
-        // 更新本地数据
-        characterData.value = statData;
-        combatData.value = statData;
-
-        // 显示升级提示
-        const bonusText =
-          extraStatPoints > 0 || extraSkillPoints > 0
-            ? `（含天赋加成：+${extraStatPoints}属性点、+${extraSkillPoints}技能点）`
-            : '';
-        if (typeof toastr !== 'undefined') {
-          toastr.success(
-            `等级提升至 ${newLevel}！获得 ${attributePointsGained} 属性点、${skillPointsGained} 技能点${bonusText}`,
-            '🎉 升级！',
-            { timeOut: 3000 },
-          );
-        }
-      }
-    }
-  } catch (error) {
-    console.error('[状态栏] 自动升级检查失败:', error);
-  }
-}
-
-// 更新手机顶部状态（从 MVU 读取游戏时间与当前位置）
-async function updateTime() {
-  try {
-    const mvuData = await getLatestMvuData();
-    const statData = mvuData?.stat_data;
-    const timeData = statData?.时间系统;
-    const locationData = statData?.位置系统;
-
-    const gameTime = timeData?.时间;
-    if (typeof gameTime === 'string' && gameTime.trim()) {
-      currentTime.value = gameTime.trim();
-    } else if (typeof gameTime === 'number') {
-      const hours = Math.floor(gameTime / 60);
-      const minutes = gameTime % 60;
-      currentTime.value = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-    } else {
-      currentTime.value = '00:00';
-    }
-
-    currentDate.value = typeof timeData?.日期 === 'string' && timeData.日期 ? timeData.日期 : '2025年1月1日';
-    currentLocation.value =
-      typeof locationData?.地点名称 === 'string' && locationData.地点名称
-        ? locationData.地点名称
-        : typeof locationData?.坐标 === 'string' && locationData.坐标
-          ? locationData.坐标
-          : '初始点';
-    currentCoordinate.value =
-      typeof locationData?.坐标 === 'string' && locationData.坐标
-        ? locationData.坐标
-        : `F${Number(locationData?.楼层 || 1)}`;
-  } catch (error) {
-    console.warn('[状态栏] 读取手机状态失败:', error);
+  const gameTime = timeData?.时间;
+  if (typeof gameTime === 'string' && gameTime.trim()) {
+    currentTime.value = gameTime.trim();
+  } else if (typeof gameTime === 'number') {
+    const hours = Math.floor(gameTime / 60);
+    const minutes = gameTime % 60;
+    currentTime.value = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  } else {
     currentTime.value = '00:00';
-    currentDate.value = '2025年1月1日';
-    currentLocation.value = '初始点';
-    currentCoordinate.value = '[1-1]';
+  }
+
+  currentDate.value = typeof timeData?.日期 === 'string' && timeData.日期 ? timeData.日期 : '2025年1月1日';
+  currentLocation.value =
+    typeof locationData?.地点名称 === 'string' && locationData.地点名称
+      ? locationData.地点名称
+      : typeof locationData?.坐标 === 'string' && locationData.坐标
+        ? locationData.坐标
+        : '初始点';
+  currentCoordinate.value =
+    typeof locationData?.坐标 === 'string' && locationData.坐标
+      ? locationData.坐标
+      : `F${Number(locationData?.楼层 || 1)}`;
+}
+
+const PHONE_REFRESH_FALLBACK_MS = 15_000;
+const PHONE_EVENT_REFRESH_DEBOUNCE_MS = 120;
+const PHONE_SLOW_OPERATION_MS = 80;
+let updateInterval: number | null = null;
+let phoneDataRefreshTimer: number | null = null;
+let phoneDataRefreshPromise: Promise<void> | null = null;
+let phoneDataRefreshQueued = false;
+let mvuUpdateListener: EventOnReturn | null = null;
+
+function reportSlowPhoneOperation(name: string, startedAt: number) {
+  const elapsed = Math.round(performance.now() - startedAt);
+  if (elapsed >= PHONE_SLOW_OPERATION_MS) {
+    console.info(`[状态栏] ${name}耗时 ${elapsed}ms`);
+  }
+}
+
+async function refreshPhoneData(reason: string): Promise<void> {
+  if (!props.isVisible) return;
+
+  if (phoneDataRefreshPromise) {
+    phoneDataRefreshQueued = true;
+    return phoneDataRefreshPromise;
+  }
+
+  const startedAt = performance.now();
+  phoneDataRefreshPromise = (async () => {
+    try {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData?.stat_data) {
+        console.warn(`[状态栏] MVU 数据为空，跳过手机刷新（${reason}）`);
+        return;
+      }
+
+      updatePhoneState(mvuData.stat_data);
+    } catch (error) {
+      console.error(`[状态栏] 刷新手机数据失败（${reason}）:`, error);
+    } finally {
+      reportSlowPhoneOperation(`手机数据刷新（${reason}）`, startedAt);
+    }
+  })();
+
+  try {
+    await phoneDataRefreshPromise;
+  } finally {
+    phoneDataRefreshPromise = null;
+    if (phoneDataRefreshQueued) {
+      phoneDataRefreshQueued = false;
+      schedulePhoneDataRefresh('合并的变量更新');
+    }
+  }
+}
+
+function schedulePhoneDataRefresh(reason: string, delay = PHONE_EVENT_REFRESH_DEBOUNCE_MS) {
+  if (!props.isVisible || phoneDataRefreshTimer !== null) return;
+
+  phoneDataRefreshTimer = window.setTimeout(() => {
+    phoneDataRefreshTimer = null;
+    void refreshPhoneData(reason);
+  }, delay);
+}
+
+function measurePhoneOpenFirstFrame() {
+  const hostWindow = getPhoneHostWindow();
+  const performanceApi = hostWindow.performance;
+  const markPrefix = `fatria-phone-open-${Date.now()}`;
+
+  try {
+    performanceApi.mark(`${markPrefix}-start`);
+    hostWindow.requestAnimationFrame(() => {
+      hostWindow.requestAnimationFrame(() => {
+        const endMark = `${markPrefix}-first-frame`;
+        performanceApi.mark(endMark);
+        performanceApi.measure(markPrefix, `${markPrefix}-start`, endMark);
+        const entries = performanceApi.getEntriesByName(markPrefix);
+        const duration = entries.length > 0 ? entries[entries.length - 1].duration : undefined;
+        if (duration !== undefined) {
+          console.info(`[状态栏] 小手机打开首帧 ${Math.round(duration)}ms`);
+        }
+        performanceApi.clearMeasures(markPrefix);
+        performanceApi.clearMarks(`${markPrefix}-start`);
+        performanceApi.clearMarks(endMark);
+      });
+    });
+  } catch (error) {
+    console.debug('[状态栏] 性能标记不可用:', error);
   }
 }
 
@@ -2048,9 +2065,6 @@ async function updateTime() {
 function close() {
   emit('close');
 }
-
-// 监听 MVU 变量更新
-let updateInterval: number | null = null;
 
 function handleScriptUpdateStatus(event: Event) {
   const detail = (event as CustomEvent<ScriptUpdateState>).detail;
@@ -2060,40 +2074,31 @@ function handleScriptUpdateStatus(event: Event) {
 }
 
 onMounted(() => {
-  loadMvuData();
-  updateTime();
   window.requestAnimationFrame(() => applyPhonePosition(phonePosition.value));
   getPhoneHostWindow().addEventListener('resize', handlePhoneViewportResize);
 
-  // 每2秒更新一次数据
+  // 变量事件为主，低频定时器只用于弥补外部脚本未发送事件的情况。
   updateInterval = window.setInterval(() => {
     if (props.isVisible) {
-      loadMvuData();
-      updateTime(); // 同时更新游戏时间
+      void refreshPhoneData('低频兜底');
     }
-  }, 2000);
+  }, PHONE_REFRESH_FALLBACK_MS);
 
   // 监听 MVU 变量更新事件
   const globalAny = window as any;
   if (globalAny.eventOn && globalAny.Mvu) {
-    globalAny.eventOn(globalAny.Mvu.events.VARIABLE_UPDATE_ENDED, () => {
-      if (props.isVisible) {
-        loadMvuData();
-        updateTime(); // 变量更新时也更新游戏时间
-      }
+    mvuUpdateListener = globalAny.eventOn(globalAny.Mvu.events.VARIABLE_UPDATE_ENDED, () => {
+      schedulePhoneDataRefresh('MVU 变量更新');
     });
   }
 
   // 监听自定义数据更新事件（用于背包界面等）
   const dataUpdateHandler = () => {
-    if (props.isVisible) {
-      loadMvuData();
-    }
+    schedulePhoneDataRefresh('自定义数据更新');
   };
   window.addEventListener('mvu-data-updated', dataUpdateHandler);
   window.addEventListener(SCRIPT_UPDATE_EVENT, handleScriptUpdateStatus);
 
-  // 保存处理器引用以便清理
   (window as any).__statusBarDataUpdateHandler = dataUpdateHandler;
 });
 
@@ -2106,6 +2111,11 @@ onUnmounted(() => {
   if (updateInterval !== null) {
     clearInterval(updateInterval);
   }
+  if (phoneDataRefreshTimer !== null) {
+    clearTimeout(phoneDataRefreshTimer);
+  }
+  mvuUpdateListener?.stop();
+  mvuUpdateListener = null;
   // 移除事件监听
   const handler = (window as any).__statusBarDataUpdateHandler;
   if (handler) {
@@ -3158,8 +3168,7 @@ onUnmounted(() => {
 
 .preview-app-glass-tile {
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.28), transparent 42%),
-    linear-gradient(145deg, #31b8c9, #315d9d);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.28), transparent 42%), linear-gradient(145deg, #31b8c9, #315d9d);
 }
 
 .preview-app-academy-badge {
@@ -3727,6 +3736,21 @@ onUnmounted(() => {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+// 移动端或用户选择简化效果时，避免整屏模糊和多层合成导致 WebView 掉帧或被系统回收。
+.phone-device.phone-lite-visuals {
+  filter: none;
+  animation: none;
+
+  .phone-wallpaper {
+    filter: none;
+    transform: none;
+  }
+
+  :deep(*) {
+    backdrop-filter: none !important;
   }
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <div class="status-bar-shell">
+  <div class="status-bar-shell" :class="{ 'low-performance': isLiteVisuals }">
     <button
       v-show="!isVisible"
       ref="launcherRef"
@@ -40,6 +40,7 @@ type LauncherPosition = {
 };
 
 type LauncherStyle = (typeof LAUNCHER_STYLE_OPTIONS)[number];
+type PhoneVisualMode = 'auto' | 'full' | 'lite';
 
 type DragState = {
   startX: number;
@@ -56,6 +57,7 @@ const launcherPosition = ref<LauncherPosition>({
   y: VIEWPORT_PADDING,
 });
 const launcherSkin = ref<LauncherStyle>('orb');
+const isLiteVisuals = ref(false);
 const dragState = ref<DragState>(null);
 const isDragging = ref(false);
 let lastDragEndedAt = 0;
@@ -135,6 +137,25 @@ function isLauncherStyle(value: unknown): value is LauncherStyle {
   return LAUNCHER_STYLE_OPTIONS.includes(value as LauncherStyle);
 }
 
+function isPhoneVisualMode(value: unknown): value is PhoneVisualMode {
+  return value === 'auto' || value === 'full' || value === 'lite';
+}
+
+function shouldUseLiteVisuals(mode: PhoneVisualMode): boolean {
+  if (mode === 'lite') return true;
+  if (mode === 'full') return false;
+
+  const hostWindow = getHostWindow();
+  const navigatorWithMemory = hostWindow.navigator as Navigator & { deviceMemory?: number };
+  const prefersReducedMotion = hostWindow.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  const coarsePointer = hostWindow.matchMedia?.('(pointer: coarse)').matches ?? false;
+  const lowMemory = typeof navigatorWithMemory.deviceMemory === 'number' && navigatorWithMemory.deviceMemory <= 4;
+  const lowConcurrency =
+    typeof navigatorWithMemory.hardwareConcurrency === 'number' && navigatorWithMemory.hardwareConcurrency <= 4;
+
+  return prefersReducedMotion || coarsePointer || lowMemory || lowConcurrency;
+}
+
 function readLauncherSkinFromStorage(): LauncherStyle {
   try {
     const raw = getStorage()?.getItem(PHONE_PREFS_STORAGE_KEY);
@@ -147,18 +168,33 @@ function readLauncherSkinFromStorage(): LauncherStyle {
   }
 }
 
+function readVisualModeFromStorage(): PhoneVisualMode {
+  try {
+    const raw = getStorage()?.getItem(PHONE_PREFS_STORAGE_KEY);
+    if (!raw) return 'auto';
+
+    const parsed = JSON.parse(raw);
+    return isPhoneVisualMode(parsed?.visualMode) ? parsed.visualMode : 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
 function syncLauncherSkinFromStorage() {
   launcherSkin.value = readLauncherSkinFromStorage();
+  isLiteVisuals.value = shouldUseLiteVisuals(readVisualModeFromStorage());
 }
 
 function handlePhonePreferencesUpdated(event: Event) {
   const detail = (event as CustomEvent).detail;
   if (isLauncherStyle(detail?.launcherStyle)) {
     launcherSkin.value = detail.launcherStyle;
-    return;
   }
-
-  syncLauncherSkinFromStorage();
+  if (isPhoneVisualMode(detail?.visualMode)) {
+    isLiteVisuals.value = shouldUseLiteVisuals(detail.visualMode);
+  } else {
+    syncLauncherSkinFromStorage();
+  }
 }
 
 function handlePhonePreferencesStorage(event: StorageEvent) {
@@ -581,6 +617,10 @@ onUnmounted(() => {
   border-radius: 999px;
   background: rgba(99, 102, 241, 0.16);
   animation: launcher-pulse 2.4s ease-out infinite;
+}
+
+.status-bar-shell.low-performance .launcher-halo {
+  animation: none;
 }
 
 .launcher-glass {

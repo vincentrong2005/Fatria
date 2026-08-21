@@ -19,6 +19,7 @@ import {
 import { unlockAvatarVariationsFromMvuData } from '../shared/avatarVariationStore';
 import { getLatestMvuData, replaceLatestMvuData, waitForMvu } from '../shared/mvuStore';
 import { syncCurrentChatUserInfoToPersona } from '../shared/userWorldbookSync';
+import { syncXiaoyeyueLightDarkStatusBonus } from '../shared/xiaoyeyueMagicGirl';
 import { shouldTriggerOrgasm } from '../开局/utils/combat-calculator';
 import StatusBarWrapper from './components/StatusBarWrapper.vue';
 import { getDailyTalentEffect } from './data/talentDatabase';
@@ -910,6 +911,10 @@ async function updateDependentVariables() {
 
     const statData = mvuData.stat_data;
     const updates: Record<string, any> = {};
+    const xiaoyeyueBonusChanged = syncXiaoyeyueLightDarkStatusBonus(statData);
+    if (xiaoyeyueBonusChanged) {
+      console.info('[性斗学园脚本] 已同步光与暗交融的魔法少女动态加成');
+    }
 
     const currentLevel = Number(getValue(mvuData, '角色基础._等级', 1) as any);
     const currentExp = Number(getValue(mvuData, '角色基础.经验值', 0) as any);
@@ -968,13 +973,17 @@ async function updateDependentVariables() {
         const remainingExp = finalExp - levelsGained * expNeededPerLevel;
         const attributePointsPerLevel = Math.floor(potential / 2);
         const skillPointsPerLevel = Math.floor(potential);
+        const extraAttributePointsPerLevel = getDailyTalentEffect(currentTalentId, 'extra_stat_point');
+        const extraSkillPointsPerLevel = getDailyTalentEffect(currentTalentId, 'extra_skill_point');
         const currentAttributePoints = Number(getValue(mvuData, '核心状态.$属性点', 0) as any);
         const currentSkillPoints = Number(getValue(mvuData, '核心状态.$技能点', 0) as any);
 
         updates['角色基础._等级'] = newLevel;
         updates['角色基础.经验值'] = remainingExp;
-        updates['核心状态.$属性点'] = currentAttributePoints + levelsGained * attributePointsPerLevel;
-        updates['核心状态.$技能点'] = currentSkillPoints + levelsGained * skillPointsPerLevel;
+        updates['核心状态.$属性点'] =
+          currentAttributePoints + levelsGained * (attributePointsPerLevel + extraAttributePointsPerLevel);
+        updates['核心状态.$技能点'] =
+          currentSkillPoints + levelsGained * (skillPointsPerLevel + extraSkillPointsPerLevel);
 
         finalLevel = newLevel;
         finalExp = remainingExp;
@@ -1006,7 +1015,7 @@ async function updateDependentVariables() {
 
     const exorcismMazeUnlock = prepareExorcismMazeQuestUnlock(mvuData);
 
-    if (Object.keys(updates).length > 0 || exorcismMazeUnlock.changed) {
+    if (Object.keys(updates).length > 0 || exorcismMazeUnlock.changed || xiaoyeyueBonusChanged) {
       await replaceLatestMvuData(mvuData);
     }
     if (exorcismMazeUnlock.shouldRecord) {
@@ -1087,8 +1096,10 @@ function registerMvuEventListeners() {
         '核心状态._潜力',
         '核心状态.$最大快感',
         '核心状态.$快感',
+        '核心状态.堕落度',
         '技能系统.$天赋',
         '关系系统',
+        '永久状态.状态列表',
       ];
 
       let hasBaseChange = false;
