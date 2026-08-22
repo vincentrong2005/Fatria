@@ -17,7 +17,7 @@ import {
   unlockMaxFavorCharacterCGsFromMvuData,
 } from '../shared/cgUnlockStore';
 import { unlockAvatarVariationsFromMvuData } from '../shared/avatarVariationStore';
-import { getLatestMvuData, replaceLatestMvuData, waitForMvu } from '../shared/mvuStore';
+import { getLatestMvuData, replaceLatestMvuData, runLatestMvuTransaction, waitForMvu } from '../shared/mvuStore';
 import { syncCurrentChatUserInfoToPersona } from '../shared/userWorldbookSync';
 import { syncXiaoyeyueLightDarkStatusBonus } from '../shared/xiaoyeyueMagicGirl';
 import { shouldTriggerOrgasm } from '../开局/utils/combat-calculator';
@@ -585,76 +585,78 @@ if (isPrimaryScriptInstance) {
  */
 async function enforcePotentialCapOnStartup() {
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) {
-      console.warn('[性斗学园脚本] 无法获取 MVU 数据，跳过启动校验');
-      return;
-    }
-
-    let hasChanges = false;
-    let hasNegative = false;
-    const warnings: string[] = [];
-
-    // 1. 检测潜力上限
-    const rawPotential = get(mvuData.stat_data, '核心状态._潜力', 0);
-    const potential = Number(rawPotential);
-
-    if (Number.isFinite(potential) && potential > 10) {
-      console.warn(`[性斗学园脚本] 检测到潜力异常：${potential} (> 10)。是否偷偷改数值了？将自动修正为 10。`);
-      warnings.push(`潜力异常：${potential}（>10）`);
-      set(mvuData.stat_data, '核心状态._潜力', 10);
-      hasChanges = true;
-    }
-
-    // 2. 检测属性点上限
-    const rawAttrPoints = get(mvuData.stat_data, '核心状态.$属性点', 0);
-    const attrPoints = Number(rawAttrPoints);
-
-    if (Number.isFinite(attrPoints) && attrPoints < 0) {
-      console.warn(`[性斗学园脚本] 不要点那么快！检测到属性点为负数：${attrPoints}。已重置为 0。`);
-      warnings.push(`属性点为负数：${attrPoints}`);
-      set(mvuData.stat_data, '核心状态.$属性点', 0);
-      hasChanges = true;
-      hasNegative = true;
-    }
-
-    if (Number.isFinite(attrPoints) && attrPoints > 500) {
-      console.warn(`[性斗学园脚本] 检测到属性点异常：${attrPoints} (> 500)。自动清零。`);
-      warnings.push(`属性点异常：${attrPoints}（>500）`);
-      set(mvuData.stat_data, '核心状态.$属性点', 0);
-      hasChanges = true;
-    }
-
-    // 3. 检测技能点上限
-    const rawSkillPoints = get(mvuData.stat_data, '核心状态.$技能点', 0);
-    const skillPoints = Number(rawSkillPoints);
-
-    if (Number.isFinite(skillPoints) && skillPoints < 0) {
-      console.warn(`[性斗学园脚本] 不要点那么快！检测到技能点为负数：${skillPoints}。已重置为 0。`);
-      warnings.push(`技能点为负数：${skillPoints}`);
-      set(mvuData.stat_data, '核心状态.$技能点', 0);
-      hasChanges = true;
-      hasNegative = true;
-    }
-
-    if (Number.isFinite(skillPoints) && skillPoints > 500) {
-      console.warn(`[性斗学园脚本] 检测到技能点异常：${skillPoints} (> 500)。自动清零。`);
-      warnings.push(`技能点异常：${skillPoints}（>500）`);
-      set(mvuData.stat_data, '核心状态.$技能点', 0);
-      hasChanges = true;
-    }
-
-    // 统一提示并写回
-    if (hasChanges) {
-      if (warnings.length > 0 && typeof toastr !== 'undefined') {
-        const message = hasNegative
-          ? `不要点那么快！\n${warnings.join('\n')}\n已重置为 0。`
-          : `你小子，是不是偷偷改我变量了？\n${warnings.join('\n')}\n给你改回去了。`;
-        toastr.warning(message, hasNegative ? '😤' : '😈', { timeOut: 8000 });
+    await runLatestMvuTransaction('启动数值校验', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) {
+        console.warn('[性斗学园脚本] 无法获取 MVU 数据，跳过启动校验');
+        return;
       }
-      await replaceLatestMvuData(mvuData);
-      console.info('[性斗学园脚本] 启动校验完成，异常数值已修正');
-    }
+
+      let hasChanges = false;
+      let hasNegative = false;
+      const warnings: string[] = [];
+
+      // 1. 检测潜力上限
+      const rawPotential = get(mvuData.stat_data, '核心状态._潜力', 0);
+      const potential = Number(rawPotential);
+
+      if (Number.isFinite(potential) && potential > 10) {
+        console.warn(`[性斗学园脚本] 检测到潜力异常：${potential} (> 10)。是否偷偷改数值了？将自动修正为 10。`);
+        warnings.push(`潜力异常：${potential}（>10）`);
+        set(mvuData.stat_data, '核心状态._潜力', 10);
+        hasChanges = true;
+      }
+
+      // 2. 检测属性点上限
+      const rawAttrPoints = get(mvuData.stat_data, '核心状态.$属性点', 0);
+      const attrPoints = Number(rawAttrPoints);
+
+      if (Number.isFinite(attrPoints) && attrPoints < 0) {
+        console.warn(`[性斗学园脚本] 不要点那么快！检测到属性点为负数：${attrPoints}。已重置为 0。`);
+        warnings.push(`属性点为负数：${attrPoints}`);
+        set(mvuData.stat_data, '核心状态.$属性点', 0);
+        hasChanges = true;
+        hasNegative = true;
+      }
+
+      if (Number.isFinite(attrPoints) && attrPoints > 500) {
+        console.warn(`[性斗学园脚本] 检测到属性点异常：${attrPoints} (> 500)。自动清零。`);
+        warnings.push(`属性点异常：${attrPoints}（>500）`);
+        set(mvuData.stat_data, '核心状态.$属性点', 0);
+        hasChanges = true;
+      }
+
+      // 3. 检测技能点上限
+      const rawSkillPoints = get(mvuData.stat_data, '核心状态.$技能点', 0);
+      const skillPoints = Number(rawSkillPoints);
+
+      if (Number.isFinite(skillPoints) && skillPoints < 0) {
+        console.warn(`[性斗学园脚本] 不要点那么快！检测到技能点为负数：${skillPoints}。已重置为 0。`);
+        warnings.push(`技能点为负数：${skillPoints}`);
+        set(mvuData.stat_data, '核心状态.$技能点', 0);
+        hasChanges = true;
+        hasNegative = true;
+      }
+
+      if (Number.isFinite(skillPoints) && skillPoints > 500) {
+        console.warn(`[性斗学园脚本] 检测到技能点异常：${skillPoints} (> 500)。自动清零。`);
+        warnings.push(`技能点异常：${skillPoints}（>500）`);
+        set(mvuData.stat_data, '核心状态.$技能点', 0);
+        hasChanges = true;
+      }
+
+      // 统一提示并写回
+      if (hasChanges) {
+        if (warnings.length > 0 && typeof toastr !== 'undefined') {
+          const message = hasNegative
+            ? `不要点那么快！\n${warnings.join('\n')}\n已重置为 0。`
+            : `你小子，是不是偷偷改我变量了？\n${warnings.join('\n')}\n给你改回去了。`;
+          toastr.warning(message, hasNegative ? '😤' : '😈', { timeOut: 8000 });
+        }
+        await replaceLatestMvuData(mvuData);
+        console.info('[性斗学园脚本] 启动校验完成，异常数值已修正');
+      }
+    });
   } catch (error) {
     console.error('[性斗学园脚本] 启动校验时出错:', error);
   }
@@ -680,20 +682,22 @@ async function normalizeLatestCharacterNames(reason: string) {
 
   try {
     isNormalizingCharacterNames = true;
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) {
-      console.warn(`[性斗学园脚本] 无法获取 MVU 数据，跳过角色名规范化（${reason}）`);
-      return false;
-    }
+    return await runLatestMvuTransaction(`角色名规范化：${reason}`, async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) {
+        console.warn(`[性斗学园脚本] 无法获取 MVU 数据，跳过角色名规范化（${reason}）`);
+        return false;
+      }
 
-    const result = normalizeCharacterNamesInMvuData(mvuData);
-    if (!result.changed) {
-      return false;
-    }
+      const result = normalizeCharacterNamesInMvuData(mvuData);
+      if (!result.changed) {
+        return false;
+      }
 
-    await replaceLatestMvuData(mvuData);
-    console.info(`[性斗学园脚本] 角色名规范化完成（${reason}）：${result.logs.join('；')}`);
-    return true;
+      await replaceLatestMvuData(mvuData);
+      console.info(`[性斗学园脚本] 角色名规范化完成（${reason}）：${result.logs.join('；')}`);
+      return true;
+    });
   } catch (error) {
     console.error('[性斗学园脚本] 角色名规范化时出错:', error);
     return false;
@@ -711,20 +715,22 @@ async function normalizeLatestBackpackEquipments(reason: string, previousMvuData
 
   try {
     isNormalizingBackpackEquipments = true;
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) {
-      console.warn(`[性斗学园脚本] 无法获取 MVU 数据，跳过背包装备去重（${reason}）`);
-      return false;
-    }
+    return await runLatestMvuTransaction(`背包装备去重：${reason}`, async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) {
+        console.warn(`[性斗学园脚本] 无法获取 MVU 数据，跳过背包装备去重（${reason}）`);
+        return false;
+      }
 
-    const result = normalizeBackpackEquipmentsInMvuData(mvuData, previousMvuData);
-    if (!result.changed) {
-      return false;
-    }
+      const result = normalizeBackpackEquipmentsInMvuData(mvuData, previousMvuData);
+      if (!result.changed) {
+        return false;
+      }
 
-    await replaceLatestMvuData(mvuData);
-    console.info(`[性斗学园脚本] 背包装备去重完成（${reason}）：${result.logs.join('；')}`);
-    return true;
+      await replaceLatestMvuData(mvuData);
+      console.info(`[性斗学园脚本] 背包装备去重完成（${reason}）：${result.logs.join('；')}`);
+      return true;
+    });
   } catch (error) {
     console.error('[性斗学园脚本] 背包装备去重时出错:', error);
     return false;
@@ -865,23 +871,25 @@ function notifyCGUnlockRecordsUpdated(characters: string[], unlockedCount: numbe
  */
 async function updateRank() {
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) {
-      console.warn('[性斗学园脚本] 无法获取 MVU 数据，跳过段位更新');
-      return;
-    }
+    await runLatestMvuTransaction('段位同步', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) {
+        console.warn('[性斗学园脚本] 无法获取 MVU 数据，跳过段位更新');
+        return;
+      }
 
-    const level = getValue(mvuData, '角色基础._等级', 1);
-    const expectedRank = calculateRank(level);
-    const currentRank = get(mvuData.stat_data, '角色基础._段位', '无段位');
+      const level = getValue(mvuData, '角色基础._等级', 1);
+      const expectedRank = calculateRank(level);
+      const currentRank = get(mvuData.stat_data, '角色基础._段位', '无段位');
 
-    if (expectedRank !== currentRank) {
-      set(mvuData.stat_data, '角色基础._段位', expectedRank);
-      await replaceLatestMvuData(mvuData);
-      console.info(
-        `[性斗学园脚本] [独立段位更新] 等级 ${level} → ${expectedRank}段 (从 "${currentRank}" 更新为 "${expectedRank}")`,
-      );
-    }
+      if (expectedRank !== currentRank) {
+        set(mvuData.stat_data, '角色基础._段位', expectedRank);
+        await replaceLatestMvuData(mvuData);
+        console.info(
+          `[性斗学园脚本] [独立段位更新] 等级 ${level} → ${expectedRank}段 (从 "${currentRank}" 更新为 "${expectedRank}")`,
+        );
+      }
+    });
   } catch (error) {
     console.error('[性斗学园脚本] 独立段位更新时出错:', error);
   }
@@ -902,144 +910,145 @@ async function updateDependentVariables() {
 
   try {
     isUpdating = true;
+    await runLatestMvuTransaction('派生状态同步', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) {
+        console.warn('[性斗学园脚本] 无法获取 MVU 数据，跳过更新');
+        return;
+      }
 
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) {
-      console.warn('[性斗学园脚本] 无法获取 MVU 数据，跳过更新');
-      return;
-    }
+      const statData = mvuData.stat_data;
+      const updates: Record<string, any> = {};
+      const xiaoyeyueBonusChanged = syncXiaoyeyueLightDarkStatusBonus(statData);
+      if (xiaoyeyueBonusChanged) {
+        console.info('[性斗学园脚本] 已同步光与暗交融的魔法少女动态加成');
+      }
 
-    const statData = mvuData.stat_data;
-    const updates: Record<string, any> = {};
-    const xiaoyeyueBonusChanged = syncXiaoyeyueLightDarkStatusBonus(statData);
-    if (xiaoyeyueBonusChanged) {
-      console.info('[性斗学园脚本] 已同步光与暗交融的魔法少女动态加成');
-    }
+      const currentLevel = Number(getValue(mvuData, '角色基础._等级', 1) as any);
+      const currentExp = Number(getValue(mvuData, '角色基础.经验值', 0) as any);
+      const difficulty = String(getValue(mvuData, '角色基础.难度', '普通') as any);
+      const potential = Number(getValue(mvuData, '核心状态._潜力', 5.0) as any);
+      const talents = statData.技能系统?.$天赋 || {};
+      const talentIds = Object.keys(talents);
+      const currentTalentId = talentIds.length > 0 ? talentIds[0] : undefined;
 
-    const currentLevel = Number(getValue(mvuData, '角色基础._等级', 1) as any);
-    const currentExp = Number(getValue(mvuData, '角色基础.经验值', 0) as any);
-    const difficulty = String(getValue(mvuData, '角色基础.难度', '普通') as any);
-    const potential = Number(getValue(mvuData, '核心状态._潜力', 5.0) as any);
-    const talents = statData.技能系统?.$天赋 || {};
-    const talentIds = Object.keys(talents);
-    const currentTalentId = talentIds.length > 0 ? talentIds[0] : undefined;
+      const currentLust = Number(getValue(mvuData, '核心状态.$快感', 0) as any);
+      const maxLust = Number(getValue(mvuData, '核心状态.$最大快感', 100) as any);
 
-    const currentLust = Number(getValue(mvuData, '核心状态.$快感', 0) as any);
-    const maxLust = Number(getValue(mvuData, '核心状态.$最大快感', 100) as any);
-
-    if (shouldTriggerOrgasm(currentLust, maxLust)) {
-      const currentTempStates = statData.临时状态?.状态列表 || {};
-      updates['核心状态.$快感'] = 0;
-      updates['临时状态.状态列表'] = {
-        ...currentTempStates,
-        贤者时间: {
-          加成: {
-            基础性斗力成算: -20,
-            基础忍耐力成算: 10,
+      if (shouldTriggerOrgasm(currentLust, maxLust)) {
+        const currentTempStates = statData.临时状态?.状态列表 || {};
+        updates['核心状态.$快感'] = 0;
+        updates['临时状态.状态列表'] = {
+          ...currentTempStates,
+          贤者时间: {
+            加成: {
+              基础性斗力成算: -20,
+              基础忍耐力成算: 10,
+            },
+            剩余回合: 3,
+            描述: '高潮后的短暂状态',
           },
-          剩余回合: 3,
-          描述: '高潮后的短暂状态',
-        },
-      };
-    }
-
-    const baseExpNeededPerLevel = (() => {
-      switch (difficulty) {
-        case '简单':
-          return 100;
-        case '普通':
-          return 125;
-        case '困难':
-          return 150;
-        case '抖M':
-          return 200;
-        case '作弊':
-          return 100;
-        default:
-          return 125;
+        };
       }
-    })();
 
-    const expReduction = getDailyTalentEffect(currentTalentId, 'exp_reduce');
-    const expNeededPerLevel = Math.max(50, Math.floor((baseExpNeededPerLevel * (100 - expReduction)) / 100));
+      const baseExpNeededPerLevel = (() => {
+        switch (difficulty) {
+          case '简单':
+            return 100;
+          case '普通':
+            return 125;
+          case '困难':
+            return 150;
+          case '抖M':
+            return 200;
+          case '作弊':
+            return 100;
+          default:
+            return 125;
+        }
+      })();
 
-    let finalLevel = currentLevel;
-    let finalExp = currentExp;
+      const expReduction = getDailyTalentEffect(currentTalentId, 'exp_reduce');
+      const expNeededPerLevel = Math.max(50, Math.floor((baseExpNeededPerLevel * (100 - expReduction)) / 100));
 
-    if (finalLevel < 100 && finalExp >= expNeededPerLevel) {
-      const levelsGained = Math.min(100 - finalLevel, Math.floor(finalExp / expNeededPerLevel));
-      if (levelsGained > 0) {
-        const newLevel = finalLevel + levelsGained;
-        const remainingExp = finalExp - levelsGained * expNeededPerLevel;
-        const attributePointsPerLevel = Math.floor(potential / 2);
-        const skillPointsPerLevel = Math.floor(potential);
-        const extraAttributePointsPerLevel = getDailyTalentEffect(currentTalentId, 'extra_stat_point');
-        const extraSkillPointsPerLevel = getDailyTalentEffect(currentTalentId, 'extra_skill_point');
-        const currentAttributePoints = Number(getValue(mvuData, '核心状态.$属性点', 0) as any);
-        const currentSkillPoints = Number(getValue(mvuData, '核心状态.$技能点', 0) as any);
+      let finalLevel = currentLevel;
+      let finalExp = currentExp;
 
-        updates['角色基础._等级'] = newLevel;
-        updates['角色基础.经验值'] = remainingExp;
-        updates['核心状态.$属性点'] =
-          currentAttributePoints + levelsGained * (attributePointsPerLevel + extraAttributePointsPerLevel);
-        updates['核心状态.$技能点'] =
-          currentSkillPoints + levelsGained * (skillPointsPerLevel + extraSkillPointsPerLevel);
+      if (finalLevel < 100 && finalExp >= expNeededPerLevel) {
+        const levelsGained = Math.min(100 - finalLevel, Math.floor(finalExp / expNeededPerLevel));
+        if (levelsGained > 0) {
+          const newLevel = finalLevel + levelsGained;
+          const remainingExp = finalExp - levelsGained * expNeededPerLevel;
+          const attributePointsPerLevel = Math.floor(potential / 2);
+          const skillPointsPerLevel = Math.floor(potential);
+          const extraAttributePointsPerLevel = getDailyTalentEffect(currentTalentId, 'extra_stat_point');
+          const extraSkillPointsPerLevel = getDailyTalentEffect(currentTalentId, 'extra_skill_point');
+          const currentAttributePoints = Number(getValue(mvuData, '核心状态.$属性点', 0) as any);
+          const currentSkillPoints = Number(getValue(mvuData, '核心状态.$技能点', 0) as any);
 
-        finalLevel = newLevel;
-        finalExp = remainingExp;
+          updates['角色基础._等级'] = newLevel;
+          updates['角色基础.经验值'] = remainingExp;
+          updates['核心状态.$属性点'] =
+            currentAttributePoints + levelsGained * (attributePointsPerLevel + extraAttributePointsPerLevel);
+          updates['核心状态.$技能点'] =
+            currentSkillPoints + levelsGained * (skillPointsPerLevel + extraSkillPointsPerLevel);
+
+          finalLevel = newLevel;
+          finalExp = remainingExp;
+        }
       }
-    }
 
-    if (finalLevel >= 100 && finalExp > 0) {
-      const goldEarned = finalExp * 200;
-      const currentGold = Number(getValue(mvuData, '物品系统.学园金币', 0) as any);
-      updates['角色基础.经验值'] = 0;
-      updates['物品系统.学园金币'] = currentGold + goldEarned;
-      console.info(
-        `[性斗学园脚本] 满级经验转金币：${finalExp}经验 → ${goldEarned}金币 (总金币: ${currentGold + goldEarned})`,
-      );
-      finalExp = 0;
-    }
-
-    const expectedRank = calculateRank(finalLevel);
-    const currentRank = get(mvuData.stat_data, '角色基础._段位', '无段位');
-    if (expectedRank !== currentRank) {
-      updates['角色基础._段位'] = expectedRank;
-    }
-
-    if (Object.keys(updates).length > 0) {
-      for (const [path, value] of Object.entries(updates)) {
-        set(mvuData.stat_data, path, value);
+      if (finalLevel >= 100 && finalExp > 0) {
+        const goldEarned = finalExp * 200;
+        const currentGold = Number(getValue(mvuData, '物品系统.学园金币', 0) as any);
+        updates['角色基础.经验值'] = 0;
+        updates['物品系统.学园金币'] = currentGold + goldEarned;
+        console.info(
+          `[性斗学园脚本] 满级经验转金币：${finalExp}经验 → ${goldEarned}金币 (总金币: ${currentGold + goldEarned})`,
+        );
+        finalExp = 0;
       }
-    }
 
-    const exorcismMazeUnlock = prepareExorcismMazeQuestUnlock(mvuData);
+      const expectedRank = calculateRank(finalLevel);
+      const currentRank = get(mvuData.stat_data, '角色基础._段位', '无段位');
+      if (expectedRank !== currentRank) {
+        updates['角色基础._段位'] = expectedRank;
+      }
 
-    if (Object.keys(updates).length > 0 || exorcismMazeUnlock.changed || xiaoyeyueBonusChanged) {
-      await replaceLatestMvuData(mvuData);
-    }
-    if (exorcismMazeUnlock.shouldRecord) {
-      markExorcismMazeUnlockRecorded();
-    }
-    const legacyCGMigration = await migrateLegacyCGUnlocksToCharacterVariables(mvuData);
-    const maxFavorCGUnlock = await unlockMaxFavorCharacterCGsFromMvuData(mvuData);
-    const avatarVariationUnlock = await unlockAvatarVariationsFromMvuData(mvuData);
+      if (Object.keys(updates).length > 0) {
+        for (const [path, value] of Object.entries(updates)) {
+          set(mvuData.stat_data, path, value);
+        }
+      }
 
-    if (legacyCGMigration.changed) {
-      console.info(`[性斗学园脚本] 已将旧版本地CG记录迁移至角色变量：${legacyCGMigration.unlockedCount} 张`);
-      notifyCGUnlockRecordsUpdated(legacyCGMigration.characters, legacyCGMigration.unlockedCount);
-    }
-    if (maxFavorCGUnlock.changed) {
-      console.info(
-        `[性斗学园脚本] 好感度已满，自动解锁角色CG：${maxFavorCGUnlock.characters.join('、')}，新增 ${maxFavorCGUnlock.unlockedCount} 张`,
-      );
-      notifyCGUnlockRecordsUpdated(maxFavorCGUnlock.characters, maxFavorCGUnlock.unlockedCount);
-    }
-    if (avatarVariationUnlock.changed) {
-      console.info(
-        `[性斗学园脚本] 自动解锁头像差分：${avatarVariationUnlock.characters.join('、')}，新增 ${avatarVariationUnlock.unlockedCount} 张`,
-      );
-    }
+      const exorcismMazeUnlock = prepareExorcismMazeQuestUnlock(mvuData);
+
+      if (Object.keys(updates).length > 0 || exorcismMazeUnlock.changed || xiaoyeyueBonusChanged) {
+        await replaceLatestMvuData(mvuData);
+      }
+      if (exorcismMazeUnlock.shouldRecord) {
+        markExorcismMazeUnlockRecorded();
+      }
+      const legacyCGMigration = await migrateLegacyCGUnlocksToCharacterVariables(mvuData);
+      const maxFavorCGUnlock = await unlockMaxFavorCharacterCGsFromMvuData(mvuData);
+      const avatarVariationUnlock = await unlockAvatarVariationsFromMvuData(mvuData);
+
+      if (legacyCGMigration.changed) {
+        console.info(`[性斗学园脚本] 已将旧版本地CG记录迁移至角色变量：${legacyCGMigration.unlockedCount} 张`);
+        notifyCGUnlockRecordsUpdated(legacyCGMigration.characters, legacyCGMigration.unlockedCount);
+      }
+      if (maxFavorCGUnlock.changed) {
+        console.info(
+          `[性斗学园脚本] 好感度已满，自动解锁角色CG：${maxFavorCGUnlock.characters.join('、')}，新增 ${maxFavorCGUnlock.unlockedCount} 张`,
+        );
+        notifyCGUnlockRecordsUpdated(maxFavorCGUnlock.characters, maxFavorCGUnlock.unlockedCount);
+      }
+      if (avatarVariationUnlock.changed) {
+        console.info(
+          `[性斗学园脚本] 自动解锁头像差分：${avatarVariationUnlock.characters.join('、')}，新增 ${avatarVariationUnlock.unlockedCount} 张`,
+        );
+      }
+    });
   } catch (error) {
     console.error('[性斗学园脚本] 更新持久变量时出错:', error);
     toastr.error('数值更新出错，请查看控制台', '脚本错误', { timeOut: 5000 });
@@ -1159,46 +1168,48 @@ if (isPrimaryScriptInstance) {
  */
 async function handleConversationUpdate() {
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) {
-      console.warn('[性斗学园脚本] 无法获取 MVU 数据，跳过对话更新');
-      return;
-    }
+    await runLatestMvuTransaction('对话后状态更新', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) {
+        console.warn('[性斗学园脚本] 无法获取 MVU 数据，跳过对话更新');
+        return;
+      }
 
-    const statData = mvuData.stat_data;
+      const statData = mvuData.stat_data;
 
-    // 获取当前天赋ID
-    const talents = statData.技能系统?.$天赋;
-    const currentTalentId = talents && Object.keys(talents).length > 0 ? Object.keys(talents)[0] : undefined;
+      // 获取当前天赋ID
+      const talents = statData.技能系统?.$天赋;
+      const currentTalentId = talents && Object.keys(talents).length > 0 ? Object.keys(talents)[0] : undefined;
 
-    // 获取天赋效果倍率
-    const staminaMultiplier = getDailyTalentEffect(currentTalentId, 'stamina_recovery_double') || 1;
-    const pleasureMultiplier = getDailyTalentEffect(currentTalentId, 'pleasure_reduce_double') || 1;
+      // 获取天赋效果倍率
+      const staminaMultiplier = getDailyTalentEffect(currentTalentId, 'stamina_recovery_double') || 1;
+      const pleasureMultiplier = getDailyTalentEffect(currentTalentId, 'pleasure_reduce_double') || 1;
 
-    // 获取当前耐力和快感值
-    const currentStamina = getValue(mvuData, '核心状态.$耐力', 0);
-    const maxStamina = getValue(mvuData, '核心状态.$最大耐力', 100);
-    const currentLust = getValue(mvuData, '核心状态.$快感', 0);
-    const maxLust = getValue(mvuData, '核心状态.$最大快感', 100);
+      // 获取当前耐力和快感值
+      const currentStamina = getValue(mvuData, '核心状态.$耐力', 0);
+      const maxStamina = getValue(mvuData, '核心状态.$最大耐力', 100);
+      const currentLust = getValue(mvuData, '核心状态.$快感', 0);
+      const maxLust = getValue(mvuData, '核心状态.$最大快感', 100);
 
-    // 计算恢复/降低量（10%最大值，向下取整，应用天赋倍率）
-    const staminaRecover = Math.floor(maxStamina * 0.1 * staminaMultiplier);
-    const lustReduce = Math.floor(maxLust * 0.1 * pleasureMultiplier);
+      // 计算恢复/降低量（10%最大值，向下取整，应用天赋倍率）
+      const staminaRecover = Math.floor(maxStamina * 0.1 * staminaMultiplier);
+      const lustReduce = Math.floor(maxLust * 0.1 * pleasureMultiplier);
 
-    // 计算新值（带上下限限制）
-    const newStamina = Math.min(maxStamina, Math.max(0, currentStamina + staminaRecover));
-    const newLust = Math.max(0, currentLust - lustReduce);
+      // 计算新值（带上下限限制）
+      const newStamina = Math.min(maxStamina, Math.max(0, currentStamina + staminaRecover));
+      const newLust = Math.max(0, currentLust - lustReduce);
 
-    // 更新值
-    set(statData, '核心状态.$耐力', newStamina);
-    set(statData, '核心状态.$快感', newLust);
+      // 更新值
+      set(statData, '核心状态.$耐力', newStamina);
+      set(statData, '核心状态.$快感', newLust);
 
-    // 写回 MVU 数据
-    await replaceLatestMvuData(mvuData);
+      // 写回 MVU 数据
+      await replaceLatestMvuData(mvuData);
 
-    console.info(
-      `[性斗学园脚本] 对话后更新：耐力 ${currentStamina} → ${newStamina} (+${staminaRecover}), 快感 ${currentLust} → ${newLust} (-${lustReduce})`,
-    );
+      console.info(
+        `[性斗学园脚本] 对话后更新：耐力 ${currentStamina} → ${newStamina} (+${staminaRecover}), 快感 ${currentLust} → ${newLust} (-${lustReduce})`,
+      );
+    });
   } catch (error) {
     console.error('[性斗学园脚本] 对话更新时出错:', error);
   }

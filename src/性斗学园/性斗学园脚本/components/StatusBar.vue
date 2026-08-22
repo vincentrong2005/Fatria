@@ -1274,9 +1274,6 @@ const novelAiImageStatusText = computed(() => {
 const hasScriptUpdate = computed(() => scriptUpdateState.value.hasUpdate);
 const scriptUpdateHelperReady = computed(() => scriptUpdateState.value.status === 'latest');
 const scriptUpdateStatusText = computed(() => {
-  if (scriptUpdateState.value.status === 'available') {
-    return `${scriptUpdateState.value.message}本功能只提示处理方法，不会改写角色卡脚本内容。`;
-  }
   return scriptUpdateState.value.message;
 });
 const canResetSelectedSettings = computed(

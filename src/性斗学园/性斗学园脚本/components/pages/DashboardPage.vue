@@ -195,7 +195,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { getLatestMvuData, replaceLatestMvuData } from '../../../shared/mvuStore';
+import { getLatestMvuData, replaceLatestMvuData, runLatestMvuTransaction } from '../../../shared/mvuStore';
 import { getPlayerDerivedStats } from '../../../shared/statSelectors';
 
 const props = defineProps<{
@@ -264,23 +264,26 @@ function selectDifficulty(difficulty: string, _index: number) {
 // 确认更改难度
 async function confirmDifficultyChange() {
   if (!pendingDifficulty.value) return;
+  const difficulty = pendingDifficulty.value;
 
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) {
-      toastr.error('无法获取角色数据');
-      return;
-    }
+    await runLatestMvuTransaction('调整游戏难度', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) {
+        toastr.error('无法获取角色数据');
+        return;
+      }
 
-    // 更新难度
-    if (!mvuData.stat_data.角色基础) {
-      mvuData.stat_data.角色基础 = {};
-    }
-    mvuData.stat_data.角色基础.难度 = pendingDifficulty.value;
+      // 更新难度
+      if (!mvuData.stat_data.角色基础) {
+        mvuData.stat_data.角色基础 = {};
+      }
+      mvuData.stat_data.角色基础.难度 = difficulty;
 
-    await replaceLatestMvuData(mvuData);
+      await replaceLatestMvuData(mvuData);
 
-    toastr.success(`难度已提升至 ${pendingDifficulty.value}`, '难度调整');
+      toastr.success(`难度已提升至 ${difficulty}`, '难度调整');
+    });
   } catch (error) {
     console.error('[DashboardPage] 更改难度失败:', error);
     toastr.error('更改难度失败，请重试');

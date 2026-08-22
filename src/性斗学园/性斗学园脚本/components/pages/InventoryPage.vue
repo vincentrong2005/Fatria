@@ -176,7 +176,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { getLatestMvuData, replaceLatestMvuData } from '../../../shared/mvuStore';
+import { getLatestMvuData, replaceLatestMvuData, runLatestMvuTransaction } from '../../../shared/mvuStore';
 import { calculateEquipmentBonus } from '../../../shared/statSelectors';
 
 const props = defineProps<{
@@ -575,85 +575,87 @@ async function equipItem(itemKey: string, item: any) {
   }
 
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) {
-      console.error('[背包界面] 无法获取 MVU 数据');
-      return;
-    }
-
-    const statData = mvuData.stat_data;
-
-    // 确保物品系统结构存在
-    if (!statData.物品系统) {
-      statData.物品系统 = {};
-    }
-
-    // 确定装备槽位
-    let slotKey = '';
-    if (item.部位 === '主装备') {
-      slotKey = '主装备';
-    } else if (item.部位 === '副装备') {
-      slotKey = '副装备';
-    } else if (item.部位 === '饰品') {
-      // 优先使用空的饰品槽位
-      if (!statData.物品系统._装备栏?.饰品1?.名称) {
-        slotKey = '饰品1';
-      } else if (!statData.物品系统._装备栏?.饰品2?.名称) {
-        slotKey = '饰品2';
-      } else {
-        slotKey = '饰品1'; // 默认替换第一个
+    await runLatestMvuTransaction('装备物品', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) {
+        console.error('[背包界面] 无法获取 MVU 数据');
+        return;
       }
-    } else if (item.部位 === '特殊装备') {
-      slotKey = '特殊装备';
-    } else {
-      console.error('[背包界面] 未知的装备部位:', item.部位);
-      return;
-    }
 
-    // 如果目标槽位已有装备，先卸下到背包
-    const currentEquipped = statData.物品系统._装备栏?.[slotKey];
-    if (currentEquipped?.名称) {
-      // 将当前装备放回背包
-      addEquipmentBackToBackpack(statData, currentEquipped.名称, {
-        类型: '装备',
-        等级: currentEquipped.等级 || 'C',
-        加成属性: createFullBonusAttributes(currentEquipped.加成属性),
-        部位: item.部位,
-        描述: currentEquipped.描述 || '',
-      });
-    }
+      const statData = mvuData.stat_data;
 
-    // 从背包移除
-    consumeOneBackpackEquipment(statData, itemKey);
+      // 确保物品系统结构存在
+      if (!statData.物品系统) {
+        statData.物品系统 = {};
+      }
 
-    // 装备到槽位
-    if (!statData.物品系统._装备栏) {
-      statData.物品系统._装备栏 = {
-        主装备: { 名称: '', 等级: 'C', 加成属性: createFullBonusAttributes({}), 描述: '' },
-        副装备: { 名称: '', 等级: 'C', 加成属性: createFullBonusAttributes({}), 描述: '' },
-        饰品1: { 名称: '', 等级: 'C', 加成属性: createFullBonusAttributes({}), 描述: '' },
-        饰品2: { 名称: '', 等级: 'C', 加成属性: createFullBonusAttributes({}), 描述: '' },
-        特殊装备: { 名称: '', 等级: 'C', 加成属性: createFullBonusAttributes({}), 描述: '' },
+      // 确定装备槽位
+      let slotKey = '';
+      if (item.部位 === '主装备') {
+        slotKey = '主装备';
+      } else if (item.部位 === '副装备') {
+        slotKey = '副装备';
+      } else if (item.部位 === '饰品') {
+        // 优先使用空的饰品槽位
+        if (!statData.物品系统._装备栏?.饰品1?.名称) {
+          slotKey = '饰品1';
+        } else if (!statData.物品系统._装备栏?.饰品2?.名称) {
+          slotKey = '饰品2';
+        } else {
+          slotKey = '饰品1'; // 默认替换第一个
+        }
+      } else if (item.部位 === '特殊装备') {
+        slotKey = '特殊装备';
+      } else {
+        console.error('[背包界面] 未知的装备部位:', item.部位);
+        return;
+      }
+
+      // 如果目标槽位已有装备，先卸下到背包
+      const currentEquipped = statData.物品系统._装备栏?.[slotKey];
+      if (currentEquipped?.名称) {
+        // 将当前装备放回背包
+        addEquipmentBackToBackpack(statData, currentEquipped.名称, {
+          类型: '装备',
+          等级: currentEquipped.等级 || 'C',
+          加成属性: createFullBonusAttributes(currentEquipped.加成属性),
+          部位: item.部位,
+          描述: currentEquipped.描述 || '',
+        });
+      }
+
+      // 从背包移除
+      consumeOneBackpackEquipment(statData, itemKey);
+
+      // 装备到槽位
+      if (!statData.物品系统._装备栏) {
+        statData.物品系统._装备栏 = {
+          主装备: { 名称: '', 等级: 'C', 加成属性: createFullBonusAttributes({}), 描述: '' },
+          副装备: { 名称: '', 等级: 'C', 加成属性: createFullBonusAttributes({}), 描述: '' },
+          饰品1: { 名称: '', 等级: 'C', 加成属性: createFullBonusAttributes({}), 描述: '' },
+          饰品2: { 名称: '', 等级: 'C', 加成属性: createFullBonusAttributes({}), 描述: '' },
+          特殊装备: { 名称: '', 等级: 'C', 加成属性: createFullBonusAttributes({}), 描述: '' },
+        };
+      }
+
+      statData.物品系统._装备栏[slotKey] = {
+        名称: itemKey,
+        等级: item.等级 || 'C',
+        加成属性: createFullBonusAttributes(item.加成属性),
+        描述: item.描述 || '',
       };
-    }
 
-    statData.物品系统._装备栏[slotKey] = {
-      名称: itemKey,
-      等级: item.等级 || 'C',
-      加成属性: createFullBonusAttributes(item.加成属性),
-      描述: item.描述 || '',
-    };
+      // 更新 MVU
+      await replaceLatestMvuData(mvuData);
 
-    // 更新 MVU
-    await replaceLatestMvuData(mvuData);
+      // 显示成功提示
+      if (typeof toastr !== 'undefined') {
+        toastr.success(`已装备 ${itemKey}`);
+      }
 
-    // 显示成功提示
-    if (typeof toastr !== 'undefined') {
-      toastr.success(`已装备 ${itemKey}`);
-    }
-
-    // 触发页面更新（通过父组件）
-    window.dispatchEvent(new CustomEvent('mvu-data-updated'));
+      // 触发页面更新（通过父组件）
+      window.dispatchEvent(new CustomEvent('mvu-data-updated'));
+    });
   } catch (error) {
     console.error('[背包界面] 装备失败:', error);
     if (typeof toastr !== 'undefined') {
@@ -667,38 +669,40 @@ async function discardItem(itemKey: string) {
   if (!ok) return;
 
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) {
-      console.error('[背包界面] 无法获取 MVU 数据');
-      return;
-    }
+    await runLatestMvuTransaction('售卖物品', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) {
+        console.error('[背包界面] 无法获取 MVU 数据');
+        return;
+      }
 
-    const statData = mvuData.stat_data;
-    if (!statData.物品系统?.背包 || !statData.物品系统.背包[itemKey]) {
-      return;
-    }
+      const statData = mvuData.stat_data;
+      if (!statData.物品系统?.背包 || !statData.物品系统.背包[itemKey]) {
+        return;
+      }
 
-    // 扣除物品数量（优先按数量-1，数量不足则删除条目）
-    const item = statData.物品系统.背包[itemKey];
-    const currentQty = Number(item?.数量 ?? 1) || 1;
-    if (currentQty > 1) {
-      item.数量 = currentQty - 1;
-    } else {
-      delete statData.物品系统.背包[itemKey];
-    }
+      // 扣除物品数量（优先按数量-1，数量不足则删除条目）
+      const item = statData.物品系统.背包[itemKey];
+      const currentQty = Number(item?.数量 ?? 1) || 1;
+      if (currentQty > 1) {
+        item.数量 = currentQty - 1;
+      } else {
+        delete statData.物品系统.背包[itemKey];
+      }
 
-    // 增加金币（每件固定50）
-    if (!statData.物品系统) statData.物品系统 = {};
-    const currentCoins = Number(statData.物品系统.学园金币 ?? 0) || 0;
-    statData.物品系统.学园金币 = currentCoins + 50;
+      // 增加金币（每件固定50）
+      if (!statData.物品系统) statData.物品系统 = {};
+      const currentCoins = Number(statData.物品系统.学园金币 ?? 0) || 0;
+      statData.物品系统.学园金币 = currentCoins + 50;
 
-    await replaceLatestMvuData(mvuData);
+      await replaceLatestMvuData(mvuData);
 
-    if (typeof toastr !== 'undefined') {
-      toastr.success(`已售卖 ${itemKey}，获得 50 金币`);
-    }
+      if (typeof toastr !== 'undefined') {
+        toastr.success(`已售卖 ${itemKey}，获得 50 金币`);
+      }
 
-    window.dispatchEvent(new CustomEvent('mvu-data-updated'));
+      window.dispatchEvent(new CustomEvent('mvu-data-updated'));
+    });
   } catch (error) {
     console.error('[背包界面] 丢弃失败:', error);
     if (typeof toastr !== 'undefined') {
@@ -719,45 +723,47 @@ async function bulkSellFilteredItems() {
   if (!ok) return;
 
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) {
-      console.error('[背包界面] 无法获取 MVU 数据');
-      return;
-    }
-
-    const statData = mvuData.stat_data;
-    if (!statData.物品系统) statData.物品系统 = {};
-    if (!statData.物品系统.背包) statData.物品系统.背包 = {};
-
-    let soldTypes = 0;
-    let soldCount = 0;
-    for (const itemKey of filteredKeys) {
-      const item = statData.物品系统.背包[itemKey];
-      if (!item) continue;
-      const quantity = Math.max(1, Number(item?.数量 ?? 1) || 1);
-      soldTypes += 1;
-      soldCount += quantity;
-      delete statData.物品系统.背包[itemKey];
-    }
-
-    if (soldCount <= 0) {
-      if (typeof toastr !== 'undefined') {
-        toastr.info('当前筛选结果没有可售卖物品');
+    await runLatestMvuTransaction('批量售卖物品', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) {
+        console.error('[背包界面] 无法获取 MVU 数据');
+        return;
       }
-      return;
-    }
 
-    const currentCoins = Number(statData.物品系统.学园金币 ?? 0) || 0;
-    const gainedCoins = soldCount * SELL_PRICE_PER_ITEM;
-    statData.物品系统.学园金币 = currentCoins + gainedCoins;
+      const statData = mvuData.stat_data;
+      if (!statData.物品系统) statData.物品系统 = {};
+      if (!statData.物品系统.背包) statData.物品系统.背包 = {};
 
-    await replaceLatestMvuData(mvuData);
+      let soldTypes = 0;
+      let soldCount = 0;
+      for (const itemKey of filteredKeys) {
+        const item = statData.物品系统.背包[itemKey];
+        if (!item) continue;
+        const quantity = Math.max(1, Number(item?.数量 ?? 1) || 1);
+        soldTypes += 1;
+        soldCount += quantity;
+        delete statData.物品系统.背包[itemKey];
+      }
 
-    if (typeof toastr !== 'undefined') {
-      toastr.success(`已批量售卖 ${soldTypes} 种共 ${soldCount} 件，获得 ${gainedCoins} 金币`);
-    }
+      if (soldCount <= 0) {
+        if (typeof toastr !== 'undefined') {
+          toastr.info('当前筛选结果没有可售卖物品');
+        }
+        return;
+      }
 
-    window.dispatchEvent(new CustomEvent('mvu-data-updated'));
+      const currentCoins = Number(statData.物品系统.学园金币 ?? 0) || 0;
+      const gainedCoins = soldCount * SELL_PRICE_PER_ITEM;
+      statData.物品系统.学园金币 = currentCoins + gainedCoins;
+
+      await replaceLatestMvuData(mvuData);
+
+      if (typeof toastr !== 'undefined') {
+        toastr.success(`已批量售卖 ${soldTypes} 种共 ${soldCount} 件，获得 ${gainedCoins} 金币`);
+      }
+
+      window.dispatchEvent(new CustomEvent('mvu-data-updated'));
+    });
   } catch (error) {
     console.error('[背包界面] 批量售卖失败:', error);
     if (typeof toastr !== 'undefined') {
@@ -770,79 +776,80 @@ async function bulkSellFilteredItems() {
 async function unequipItem(slotKey: string) {
   try {
     console.log('[背包界面] 开始卸下装备，槽位:', slotKey);
+    await runLatestMvuTransaction('卸下装备', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) {
+        console.error('[背包界面] 无法获取 MVU 数据');
+        return;
+      }
 
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) {
-      console.error('[背包界面] 无法获取 MVU 数据');
-      return;
-    }
+      const statData = mvuData.stat_data;
 
-    const statData = mvuData.stat_data;
+      // 确保物品系统结构存在
+      if (!statData.物品系统) {
+        statData.物品系统 = {};
+      }
+      if (!statData.物品系统._装备栏) {
+        console.error('[背包界面] 装备栏不存在');
+        return;
+      }
 
-    // 确保物品系统结构存在
-    if (!statData.物品系统) {
-      statData.物品系统 = {};
-    }
-    if (!statData.物品系统._装备栏) {
-      console.error('[背包界面] 装备栏不存在');
-      return;
-    }
+      const equippedItem = statData.物品系统._装备栏[slotKey];
 
-    const equippedItem = statData.物品系统._装备栏[slotKey];
+      console.log('[背包界面] 当前装备:', equippedItem);
 
-    console.log('[背包界面] 当前装备:', equippedItem);
+      if (!equippedItem || !equippedItem.名称) {
+        console.warn('[背包界面] 该槽位没有装备');
+        return;
+      }
 
-    if (!equippedItem || !equippedItem.名称) {
-      console.warn('[背包界面] 该槽位没有装备');
-      return;
-    }
+      // 添加到背包
+      if (!statData.物品系统.背包) {
+        statData.物品系统.背包 = {};
+      }
 
-    // 添加到背包
-    if (!statData.物品系统.背包) {
-      statData.物品系统.背包 = {};
-    }
+      // 确定装备部位（用于背包中的装备）
+      let itemSlot = '主装备';
+      if (slotKey === '副装备') itemSlot = '副装备';
+      else if (slotKey === '饰品1' || slotKey === '饰品2') itemSlot = '饰品';
+      else if (slotKey === '特殊装备') itemSlot = '特殊装备';
 
-    // 确定装备部位（用于背包中的装备）
-    let itemSlot = '主装备';
-    if (slotKey === '副装备') itemSlot = '副装备';
-    else if (slotKey === '饰品1' || slotKey === '饰品2') itemSlot = '饰品';
-    else if (slotKey === '特殊装备') itemSlot = '特殊装备';
+      // 创建完整的背包物品对象
+      const backpackItem = {
+        类型: '装备' as const,
+        等级: equippedItem.等级 || 'C',
+        加成属性: createFullBonusAttributes(equippedItem.加成属性),
+        部位: itemSlot,
+        描述: equippedItem.描述 || '',
+      };
 
-    // 创建完整的背包物品对象
-    const backpackItem = {
-      类型: '装备' as const,
-      等级: equippedItem.等级 || 'C',
-      加成属性: createFullBonusAttributes(equippedItem.加成属性),
-      部位: itemSlot,
-      描述: equippedItem.描述 || '',
-    };
+      console.log('[背包界面] 添加到背包的物品:', backpackItem);
 
-    console.log('[背包界面] 添加到背包的物品:', backpackItem);
+      addEquipmentBackToBackpack(statData, equippedItem.名称, backpackItem);
 
-    addEquipmentBackToBackpack(statData, equippedItem.名称, backpackItem);
+      // 清空装备槽位（使用完整的结构）
+      statData.物品系统._装备栏[slotKey] = {
+        名称: '',
+        等级: 'C',
+        加成属性: createFullBonusAttributes({}),
+        描述: '',
+      };
 
-    // 清空装备槽位（使用完整的结构）
-    statData.物品系统._装备栏[slotKey] = {
-      名称: '',
-      等级: 'C',
-      加成属性: createFullBonusAttributes({}),
-      描述: '',
-    };
+      console.log('[背包界面] 装备槽位已清空');
 
-    console.log('[背包界面] 装备槽位已清空');
+      // 更新 MVU
+      await replaceLatestMvuData(mvuData);
 
-    // 更新 MVU
-    await replaceLatestMvuData(mvuData);
+      console.log('[背包界面] MVU 数据已更新');
 
-    console.log('[背包界面] MVU 数据已更新');
+      // 显示成功提示
+      if (typeof toastr !== 'undefined') {
+        toastr.success(`已卸下 ${equippedItem.名称}`);
+      }
 
-    // 显示成功提示
-    if (typeof toastr !== 'undefined') {
-      toastr.success(`已卸下 ${equippedItem.名称}`);
-    }
-
-    // 触发页面更新
-    window.dispatchEvent(new CustomEvent('mvu-data-updated'));
+      // 触发页面更新
+      window.dispatchEvent(new CustomEvent('mvu-data-updated'));
+    });
   } catch (error) {
     console.error('[背包界面] 卸下失败:', error);
     console.error('[背包界面] 错误堆栈:', error instanceof Error ? error.stack : '无堆栈信息');

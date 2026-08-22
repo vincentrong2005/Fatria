@@ -355,7 +355,7 @@ import {
   resolveStoredPlayerAvatar,
   saveStoredPlayerAvatarBlob,
 } from '../../../shared/localPreferences';
-import { getLatestMvuData, replaceLatestMvuData } from '../../../shared/mvuStore';
+import { getLatestMvuData, replaceLatestMvuData, runLatestMvuTransaction } from '../../../shared/mvuStore';
 import { getPermanentBonus, getPlayerDerivedStats, getTemporaryBonus } from '../../../shared/statSelectors';
 import { getDailyTalentEffect } from '../../data/talentDatabase';
 import { getDefaultPlayerAvatarUrl } from '../../phone/backstreetAvatarSettings';
@@ -422,54 +422,40 @@ async function upgradeAttribute(key: string, increment: number, pointCost = 1) {
   isUpgrading.value = true;
 
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData?.stat_data) {
-      isUpgrading.value = false;
-      return;
-    }
+    await runLatestMvuTransaction('属性加点', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData?.stat_data) return;
 
-    // 二次检查：从MVU数据中获取实际属性点数量
-    const actualPoints = Number(mvuData.stat_data.核心状态?.$属性点 || 0);
-    if (!Number.isFinite(actualPoints) || actualPoints < cost) {
-      isUpgrading.value = false;
-      return;
-    }
+      // 二次检查：从 MVU 中的实时数值扣点，不能使用界面上的旧快照。
+      const actualPoints = Number(mvuData.stat_data.核心状态?.$属性点 || 0);
+      if (!Number.isFinite(actualPoints) || actualPoints < cost) return;
 
-    // 获取当前值
-    const parts = key.split('.');
-    let currentValue = mvuData.stat_data;
-    for (const part of parts.slice(0, -1)) {
-      if (!currentValue[part]) currentValue[part] = {};
-      currentValue = currentValue[part];
-    }
-    const lastKey = parts[parts.length - 1];
-    const oldValue = Number(currentValue[lastKey] || 0);
-    const safeOldValue = Number.isFinite(oldValue) ? oldValue : 0;
+      const parts = key.split('.');
+      let currentValue = mvuData.stat_data;
+      for (const part of parts.slice(0, -1)) {
+        if (!currentValue[part]) currentValue[part] = {};
+        currentValue = currentValue[part];
+      }
+      const lastKey = parts[parts.length - 1];
+      const oldValue = Number(currentValue[lastKey] || 0);
+      const safeOldValue = Number.isFinite(oldValue) ? oldValue : 0;
 
-    // 更新属性值
-    currentValue[lastKey] = safeOldValue + increment * cost;
+      currentValue[lastKey] = safeOldValue + increment * cost;
+      if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
+      mvuData.stat_data.核心状态.$属性点 = actualPoints - cost;
+      await replaceLatestMvuData(mvuData);
 
-    // 减少属性点（确保不会变成负数）
-    if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
-    mvuData.stat_data.核心状态.$属性点 = Math.max(0, actualPoints - cost);
-
-    // 写回MVU
-    await replaceLatestMvuData(mvuData);
-
-    // 显示成功提示
-    if (typeof toastr !== 'undefined') {
-      toastr.success(`已消耗 ${cost} 点属性点`, '属性提升成功', { timeOut: 1500 });
-    }
+      if (typeof toastr !== 'undefined') {
+        toastr.success(`已消耗 ${cost} 点属性点`, '属性提升成功', { timeOut: 1500 });
+      }
+    });
   } catch (error) {
     console.error('[档案] 属性升级失败:', error);
     if (typeof toastr !== 'undefined') {
       toastr.error('属性升级失败', '错误', { timeOut: 2000 });
     }
   } finally {
-    // 延迟释放防抖锁，防止快速连续点击
-    setTimeout(() => {
-      isUpgrading.value = false;
-    }, 100);
+    isUpgrading.value = false;
   }
 }
 

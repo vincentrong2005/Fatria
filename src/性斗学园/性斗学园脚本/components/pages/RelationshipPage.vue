@@ -246,7 +246,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { getLatestMvuData, replaceLatestMvuData } from '../../../shared/mvuStore';
+import { getLatestMvuData, replaceLatestMvuData, runLatestMvuTransaction } from '../../../shared/mvuStore';
 import {
   AVATAR_VARIATIONS_UPDATED_EVENT,
   getAvatarVariationConfigForCharacter,
@@ -472,7 +472,9 @@ async function refreshAvatarVariationState(preserveModalIndex = false) {
   // cards responsive and lets normal image loading handle the selected avatar.
   for (const item of metadata) {
     if (!item) continue;
-    const isSelectedUnlocked = Boolean(item.selectedKey && item.options.some(option => option.key === item.selectedKey));
+    const isSelectedUnlocked = Boolean(
+      item.selectedKey && item.options.some(option => option.key === item.selectedKey),
+    );
     if (item.selectedUrl && item.selectedKey && isSelectedUnlocked) {
       nextUrls[item.config.characterName] = item.selectedUrl;
       nextKeys[item.config.characterName] = item.selectedKey;
@@ -612,26 +614,28 @@ async function forgetRelationship(name: string) {
   if (!ok) return;
 
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) {
-      console.error('[关系界面] 无法获取 MVU 数据');
-      return;
-    }
+    await runLatestMvuTransaction('遗忘关系', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) {
+        console.error('[关系界面] 无法获取 MVU 数据');
+        return;
+      }
 
-    const statData = mvuData.stat_data;
-    if (!statData.关系系统 || !statData.关系系统[name]) {
-      return;
-    }
+      const statData = mvuData.stat_data;
+      if (!statData.关系系统 || !statData.关系系统[name]) {
+        return;
+      }
 
-    delete statData.关系系统[name];
+      delete statData.关系系统[name];
 
-    await replaceLatestMvuData(mvuData);
+      await replaceLatestMvuData(mvuData);
 
-    if (typeof toastr !== 'undefined') {
-      toastr.success(`已遗忘与 ${name} 的关系`);
-    }
+      if (typeof toastr !== 'undefined') {
+        toastr.success(`已遗忘与 ${name} 的关系`);
+      }
 
-    window.dispatchEvent(new CustomEvent('mvu-data-updated'));
+      window.dispatchEvent(new CustomEvent('mvu-data-updated'));
+    });
   } catch (error) {
     console.error('[关系界面] 遗忘失败:', error);
     if (typeof toastr !== 'undefined') {

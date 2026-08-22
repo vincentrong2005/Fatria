@@ -46,12 +46,16 @@
       </div>
 
       <div class="gacha-buttons">
-        <button class="gacha-btn single" :disabled="skillPoints < 2" @click="performGacha(1)">
+        <button class="gacha-btn single" :disabled="isSkillActionPending || skillPoints < 2" @click="performGacha(1)">
           <i class="fas fa-dice-one"></i>
           <span class="btn-text">单抽</span>
           <span class="btn-cost">2 技能点</span>
         </button>
-        <button class="gacha-btn ten" :disabled="skillPoints < tenPullCost" @click="performGacha(10)">
+        <button
+          class="gacha-btn ten"
+          :disabled="isSkillActionPending || skillPoints < tenPullCost"
+          @click="performGacha(10)"
+        >
           <i class="fas fa-dice-d20"></i>
           <span class="btn-text">十连抽</span>
           <span class="btn-cost">
@@ -76,7 +80,11 @@
         </div>
         <p class="talent-gacha-note">消耗10技能点抽取一个天赋，天赋仅能拥有一个</p>
 
-        <button class="talent-gacha-btn" :disabled="skillPoints < 10" @click="performTalentGachaAction">
+        <button
+          class="talent-gacha-btn"
+          :disabled="isSkillActionPending || skillPoints < 10"
+          @click="performTalentGachaAction"
+        >
           <i class="fas fa-sparkles"></i>
           <span class="btn-text">抽取天赋</span>
           <span class="btn-cost">10 技能点</span>
@@ -129,8 +137,10 @@
             </div>
           </div>
           <div class="talent-actions">
-            <button class="discard-btn" @click="discardDrawnTalent"><i class="fas fa-times"></i> 舍弃</button>
-            <button class="replace-btn" @click="confirmReplaceTalent">
+            <button class="discard-btn" :disabled="isSkillActionPending" @click="discardDrawnTalent">
+              <i class="fas fa-times"></i> 舍弃
+            </button>
+            <button class="replace-btn" :disabled="isSkillActionPending" @click="confirmReplaceTalent">
               <i class="fas fa-check"></i> {{ currentTalent ? '替换' : '获得' }}
             </button>
           </div>
@@ -171,9 +181,17 @@
           </div>
         </div>
         <div class="result-actions">
-          <button class="select-all-btn" @click="selectAllSkills"><i class="fas fa-check-double"></i> 全选</button>
-          <button class="deselect-all-btn" @click="deselectAllSkills"><i class="fas fa-times"></i> 全不选</button>
-          <button class="confirm-btn" @click="confirmGachaResults" :disabled="selectedSkills.size === 0">
+          <button class="select-all-btn" :disabled="isSkillActionPending" @click="selectAllSkills">
+            <i class="fas fa-check-double"></i> 全选
+          </button>
+          <button class="deselect-all-btn" :disabled="isSkillActionPending" @click="deselectAllSkills">
+            <i class="fas fa-times"></i> 全不选
+          </button>
+          <button
+            class="confirm-btn"
+            @click="confirmGachaResults"
+            :disabled="isSkillActionPending || selectedSkills.size === 0"
+          >
             <i class="fas fa-check"></i> 确认获得 ({{ selectedSkills.size }}/{{ gachaResults.length }})
           </button>
         </div>
@@ -202,7 +220,11 @@
             <span>消耗: {{ exchangeAmount * 3000 }} 金币</span>
             <span>获得: {{ exchangeAmount }} 技能点</span>
           </div>
-          <button class="exchange-btn" :disabled="goldCoins < exchangeAmount * 3000" @click="performExchange">
+          <button
+            class="exchange-btn"
+            :disabled="isSkillActionPending || goldCoins < exchangeAmount * 3000"
+            @click="performExchange"
+          >
             <i class="fas fa-exchange-alt"></i> 确认兑换
           </button>
         </div>
@@ -350,12 +372,12 @@
               v-if="canUpgrade(skill)"
               class="upgrade-btn"
               @click="upgradeSkill(String(skillId), skill)"
-              :disabled="skillPoints < getUpgradeCost(skill)"
+              :disabled="isSkillActionPending || skillPoints < getUpgradeCost(skill)"
             >
               <i class="fas fa-arrow-up"></i>
               升级 ({{ getUpgradeCost(skill) }} 点)
             </button>
-            <button class="forget-btn" @click="forgetSkill(String(skillId))">
+            <button class="forget-btn" :disabled="isSkillActionPending" @click="forgetSkill(String(skillId))">
               <i class="fas fa-trash"></i>
               遗忘
             </button>
@@ -368,7 +390,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { getLatestMvuData, replaceLatestMvuData } from '../../../shared/mvuStore';
+import { getLatestMvuData, replaceLatestMvuData, runLatestMvuTransaction } from '../../../shared/mvuStore';
 import { performSingleGacha, performTenGacha, type GachaSkillData } from '../../data/skillGachaPool';
 import {
   getAdjustedGachaRates,
@@ -411,6 +433,18 @@ const exchangeAmount = ref(1);
 
 // 升级锁（防止连点导致并发升级）
 const upgradingSkillIds = ref<Set<string>>(new Set());
+const isSkillActionPending = ref(false);
+
+async function runSkillAction<T>(operationName: string, operation: () => Promise<T>): Promise<T | undefined> {
+  if (isSkillActionPending.value) return undefined;
+
+  isSkillActionPending.value = true;
+  try {
+    return await runLatestMvuTransaction(operationName, operation);
+  } finally {
+    isSkillActionPending.value = false;
+  }
+}
 
 // 天赋相关状态
 const drawnTalent = ref<TalentData | null>(null);
@@ -523,71 +557,72 @@ function generateSkillDescription(skill: any, originalDesc: string): string {
 
 // 升级技能
 async function upgradeSkill(skillId: string, skill: any) {
-  if (upgradingSkillIds.value.has(skillId)) return;
+  if (isSkillActionPending.value || upgradingSkillIds.value.has(skillId)) return;
   upgradingSkillIds.value.add(skillId);
 
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) return;
+    await runSkillAction('技能升级', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) return;
 
-    // 确保路径存在
-    if (!mvuData.stat_data.技能系统) mvuData.stat_data.技能系统 = {};
-    if (!mvuData.stat_data.技能系统.主动技能) mvuData.stat_data.技能系统.主动技能 = {};
-    if (!mvuData.stat_data.技能系统.主动技能[skillId]) {
-      mvuData.stat_data.技能系统.主动技能[skillId] = JSON.parse(JSON.stringify(skill));
-    }
-
-    const skillData = mvuData.stat_data.技能系统.主动技能[skillId];
-
-    // 确保基本信息存在
-    if (!skillData.基本信息) skillData.基本信息 = {};
-
-    // 保存原始描述用于后续更新
-    const originalDesc = skillData.基本信息.技能描述 || '';
-
-    // 以 MVU 中的实时等级为准计算本次升级费用（避免连点按旧等级重复计费）
-    const currentLevel = skillData.基本信息.技能等级 || 1;
-    const cost = currentLevel + 1;
-
-    // 二次校验技能点（以 MVU 实际值为准）
-    if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
-    const currentSkillPoints = Number(mvuData.stat_data.核心状态.$技能点 || 0);
-    if (currentSkillPoints < cost) {
-      if (typeof toastr !== 'undefined') {
-        toastr.warning('不要点那么快！技能点不足了', '😤', { timeOut: 2000 });
+      // 确保路径存在
+      if (!mvuData.stat_data.技能系统) mvuData.stat_data.技能系统 = {};
+      if (!mvuData.stat_data.技能系统.主动技能) mvuData.stat_data.技能系统.主动技能 = {};
+      if (!mvuData.stat_data.技能系统.主动技能[skillId]) {
+        mvuData.stat_data.技能系统.主动技能[skillId] = JSON.parse(JSON.stringify(skill));
       }
-      return;
-    }
 
-    // 提升等级
-    skillData.基本信息.技能等级 = Math.min(5, currentLevel + 1);
+      const skillData = mvuData.stat_data.技能系统.主动技能[skillId];
 
-    // 根据等级调整属性
-    if (!skillData.冷却与消耗) skillData.冷却与消耗 = {};
-    if (!skillData.伤害与效果) skillData.伤害与效果 = {};
+      // 确保基本信息存在
+      if (!skillData.基本信息) skillData.基本信息 = {};
 
-    // 每级增加系数：当前值 × 1.05（向下取整）
-    const currentCoefficient = skillData.伤害与效果.系数 || 100;
-    skillData.伤害与效果.系数 = Math.floor(currentCoefficient * 1.05);
+      // 保存原始描述用于后续更新
+      const originalDesc = skillData.基本信息.技能描述 || '';
 
-    // 每2级减少消耗1点
-    if (currentLevel % 2 === 0) {
-      skillData.冷却与消耗.耐力消耗 = Math.max(0, (skillData.冷却与消耗.耐力消耗 || 0) - 1);
-    }
+      // 以 MVU 中的实时等级为准计算本次升级费用（避免连点按旧等级重复计费）
+      const currentLevel = skillData.基本信息.技能等级 || 1;
+      if (currentLevel >= 5) return;
+      const cost = currentLevel + 1;
 
-    // 更新技能描述（只更新数值，保留原有格式）
-    skillData.基本信息.技能描述 = generateSkillDescription(skillData, originalDesc);
+      // 二次校验技能点（以 MVU 实际值为准）
+      if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
+      const currentSkillPoints = Number(mvuData.stat_data.核心状态.$技能点 || 0);
+      if (currentSkillPoints < cost) {
+        if (typeof toastr !== 'undefined') {
+          toastr.warning('不要点那么快！技能点不足了', '😤', { timeOut: 2000 });
+        }
+        return;
+      }
 
-    // 减少技能点（夹紧，防负数）
-    mvuData.stat_data.核心状态.$技能点 = Math.max(0, currentSkillPoints - cost);
+      // 提升等级
+      skillData.基本信息.技能等级 = currentLevel + 1;
 
-    // 写回MVU
-    await replaceLatestMvuData(mvuData);
+      // 根据等级调整属性
+      if (!skillData.冷却与消耗) skillData.冷却与消耗 = {};
+      if (!skillData.伤害与效果) skillData.伤害与效果 = {};
 
-    // 显示成功提示
-    if (typeof toastr !== 'undefined') {
-      toastr.success(`技能升级成功！等级 ${currentLevel + 1}`, '成功', { timeOut: 1500 });
-    }
+      // 每级增加系数：当前值 × 1.05（向下取整）
+      const currentCoefficient = skillData.伤害与效果.系数 || 100;
+      skillData.伤害与效果.系数 = Math.floor(currentCoefficient * 1.05);
+
+      // 每2级减少消耗1点
+      if (currentLevel % 2 === 0) {
+        skillData.冷却与消耗.耐力消耗 = Math.max(0, (skillData.冷却与消耗.耐力消耗 || 0) - 1);
+      }
+
+      // 更新技能描述（只更新数值，保留原有格式）
+      skillData.基本信息.技能描述 = generateSkillDescription(skillData, originalDesc);
+
+      // 减少技能点（夹紧，防负数）
+      mvuData.stat_data.核心状态.$技能点 = currentSkillPoints - cost;
+
+      await replaceLatestMvuData(mvuData);
+
+      if (typeof toastr !== 'undefined') {
+        toastr.success(`技能升级成功！等级 ${currentLevel + 1}`, '成功', { timeOut: 1500 });
+      }
+    });
   } catch (error) {
     console.error('[技能] 升级失败:', error);
     if (typeof toastr !== 'undefined') {
@@ -601,39 +636,40 @@ async function upgradeSkill(skillId: string, skill: any) {
 // 执行抽取
 async function performGacha(count: number) {
   const cost = count === 1 ? 2 : tenPullCost.value;
-  if (skillPoints.value < cost) return;
+  if (isSkillActionPending.value || skillPoints.value < cost) return;
 
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) return;
+    await runSkillAction('技能抽取', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) return;
 
-    // 扣除技能点
-    if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
-    const currentSkillPoints = Number(mvuData.stat_data.核心状态.$技能点 || 0);
-    if (currentSkillPoints < cost) {
-      if (typeof toastr !== 'undefined') {
-        toastr.warning('不要点那么快！技能点不足了', '😤', { timeOut: 2000 });
+      // 扣除技能点
+      if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
+      const currentSkillPoints = Number(mvuData.stat_data.核心状态.$技能点 || 0);
+      if (currentSkillPoints < cost) {
+        if (typeof toastr !== 'undefined') {
+          toastr.warning('不要点那么快！技能点不足了', '😤', { timeOut: 2000 });
+        }
+        return;
       }
-      return;
-    }
-    mvuData.stat_data.核心状态.$技能点 = Math.max(0, currentSkillPoints - cost);
+      mvuData.stat_data.核心状态.$技能点 = currentSkillPoints - cost;
 
-    // 写回MVU
-    await replaceLatestMvuData(mvuData);
+      await replaceLatestMvuData(mvuData);
 
-    // 执行抽取
-    if (count === 1) {
-      gachaResults.value = [performSingleGacha()];
-    } else {
-      gachaResults.value = performTenGacha();
-    }
+      // 执行抽取
+      if (count === 1) {
+        gachaResults.value = [performSingleGacha()];
+      } else {
+        gachaResults.value = performTenGacha();
+      }
 
-    // 清空之前的选择
-    selectedSkills.value.clear();
+      // 清空之前的选择
+      selectedSkills.value.clear();
 
-    if (typeof toastr !== 'undefined') {
-      toastr.info(`抽取完成！消耗${cost}技能点`, '抽取', { timeOut: 1500 });
-    }
+      if (typeof toastr !== 'undefined') {
+        toastr.info(`抽取完成！消耗${cost}技能点`, '抽取', { timeOut: 1500 });
+      }
+    });
   } catch (error) {
     console.error('[技能] 抽取失败:', error);
     if (typeof toastr !== 'undefined') {
@@ -644,6 +680,7 @@ async function performGacha(count: number) {
 
 // 切换技能选择状态
 function toggleSkillSelection(skillId: string) {
+  if (isSkillActionPending.value) return;
   if (selectedSkills.value.has(skillId)) {
     selectedSkills.value.delete(skillId);
   } else {
@@ -653,6 +690,7 @@ function toggleSkillSelection(skillId: string) {
 
 // 全选技能
 function selectAllSkills() {
+  if (isSkillActionPending.value) return;
   selectedSkills.value.clear();
   gachaResults.value.forEach(skill => {
     selectedSkills.value.add(skill.id);
@@ -661,11 +699,13 @@ function selectAllSkills() {
 
 // 全不选
 function deselectAllSkills() {
+  if (isSkillActionPending.value) return;
   selectedSkills.value.clear();
 }
 
 // 确认抽取结果，将选中的技能添加到玩家技能列表
 async function confirmGachaResults() {
+  if (isSkillActionPending.value) return;
   if (selectedSkills.value.size === 0) {
     if (typeof toastr !== 'undefined') {
       toastr.warning('请至少选择一个技能', '提示', { timeOut: 2000 });
@@ -673,68 +713,71 @@ async function confirmGachaResults() {
     return;
   }
 
+  const selectedSkillIds = new Set(selectedSkills.value);
+
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) return;
+    await runSkillAction('确认技能抽取', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) return;
 
-    // 确保技能系统存在
-    if (!mvuData.stat_data.技能系统) mvuData.stat_data.技能系统 = {};
-    if (!mvuData.stat_data.技能系统.主动技能) mvuData.stat_data.技能系统.主动技能 = {};
+      // 确保技能系统存在
+      if (!mvuData.stat_data.技能系统) mvuData.stat_data.技能系统 = {};
+      if (!mvuData.stat_data.技能系统.主动技能) mvuData.stat_data.技能系统.主动技能 = {};
 
-    // 只添加选中的技能
-    const selectedSkillsList = gachaResults.value.filter(skill => selectedSkills.value.has(skill.id));
-    for (const skill of selectedSkillsList) {
-      const skillData = {
-        基本信息: {
-          技能ID: skill.id,
-          技能名称: skill.name,
-          技能描述: skill.effectDescription,
-          稀有度: skill.rarity,
-          技能等级: 1,
-          技能类型: skill.type,
-        },
-        冷却与消耗: {
-          耐力消耗: skill.staminaCost,
-          冷却回合数: skill.cooldown,
-        },
-        伤害与效果: {
-          伤害来源: skill.damageSource,
-          系数: skill.coefficient,
-          基础命中率: skill.accuracy,
-          暴击修正: skill.critModifier,
-          连击数: skill.hitCount,
-          效果列表: {},
-        },
-      };
+      // 只添加选中的技能
+      const selectedSkillsList = gachaResults.value.filter(skill => selectedSkillIds.has(skill.id));
+      for (const skill of selectedSkillsList) {
+        const skillData = {
+          基本信息: {
+            技能ID: skill.id,
+            技能名称: skill.name,
+            技能描述: skill.effectDescription,
+            稀有度: skill.rarity,
+            技能等级: 1,
+            技能类型: skill.type,
+          },
+          冷却与消耗: {
+            耐力消耗: skill.staminaCost,
+            冷却回合数: skill.cooldown,
+          },
+          伤害与效果: {
+            伤害来源: skill.damageSource,
+            系数: skill.coefficient,
+            基础命中率: skill.accuracy,
+            暴击修正: skill.critModifier,
+            连击数: skill.hitCount,
+            效果列表: {},
+          },
+        };
 
-      // 添加buff效果
-      if (skill.buffs && skill.buffs.length > 0) {
-        skill.buffs.forEach((buff, index) => {
-          (skillData.伤害与效果.效果列表 as any)[`effect_${index}`] = {
-            效果类型: buff.type,
-            效果值: buff.value,
-            是否为百分比: buff.isPercent,
-            持续回合数: buff.duration,
-            是否作用敌人: buff.isTargetEnemy,
-          };
-        });
+        // 添加buff效果
+        if (skill.buffs && skill.buffs.length > 0) {
+          skill.buffs.forEach((buff, index) => {
+            (skillData.伤害与效果.效果列表 as any)[`effect_${index}`] = {
+              效果类型: buff.type,
+              效果值: buff.value,
+              是否为百分比: buff.isPercent,
+              持续回合数: buff.duration,
+              是否作用敌人: buff.isTargetEnemy,
+            };
+          });
+        }
+
+        // 使用技能ID作为键，如果已存在则覆盖
+        mvuData.stat_data.技能系统.主动技能[skill.id] = skillData;
       }
 
-      // 使用技能ID作为键，如果已存在则覆盖
-      mvuData.stat_data.技能系统.主动技能[skill.id] = skillData;
-    }
+      await replaceLatestMvuData(mvuData);
 
-    // 写回MVU
-    await replaceLatestMvuData(mvuData);
+      // 清空结果和选择
+      const selectedCount = selectedSkillIds.size;
+      gachaResults.value = [];
+      selectedSkills.value.clear();
 
-    // 清空结果和选择
-    const count = selectedSkills.value.size;
-    gachaResults.value = [];
-    selectedSkills.value.clear();
-
-    if (typeof toastr !== 'undefined') {
-      toastr.success(`成功获得${count}个技能！`, '成功', { timeOut: 1500 });
-    }
+      if (typeof toastr !== 'undefined') {
+        toastr.success(`成功获得${selectedCount}个技能！`, '成功', { timeOut: 1500 });
+      }
+    });
   } catch (error) {
     console.error('[技能] 确认抽取失败:', error);
     if (typeof toastr !== 'undefined') {
@@ -746,29 +789,38 @@ async function confirmGachaResults() {
 // 执行金币兑换技能点
 async function performExchange() {
   const goldCost = exchangeAmount.value * 3000;
-  if (goldCoins.value < goldCost) return;
+  if (isSkillActionPending.value || goldCoins.value < goldCost) return;
+  const skillPointReward = exchangeAmount.value;
 
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) return;
+    await runSkillAction('金币兑换技能点', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) return;
 
-    // 扣除金币
-    if (!mvuData.stat_data.物品系统) mvuData.stat_data.物品系统 = {};
-    mvuData.stat_data.物品系统.学园金币 = (mvuData.stat_data.物品系统.学园金币 || 0) - goldCost;
+      // 扣除金币
+      if (!mvuData.stat_data.物品系统) mvuData.stat_data.物品系统 = {};
+      const currentGold = Number(mvuData.stat_data.物品系统.学园金币 || 0);
+      if (currentGold < goldCost) {
+        if (typeof toastr !== 'undefined') {
+          toastr.warning('金币不足，无法兑换', '提示', { timeOut: 2000 });
+        }
+        return;
+      }
+      mvuData.stat_data.物品系统.学园金币 = currentGold - goldCost;
 
-    // 增加技能点
-    if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
-    mvuData.stat_data.核心状态.$技能点 = (mvuData.stat_data.核心状态.$技能点 || 0) + exchangeAmount.value;
+      // 增加技能点
+      if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
+      mvuData.stat_data.核心状态.$技能点 = (mvuData.stat_data.核心状态.$技能点 || 0) + skillPointReward;
 
-    // 写回MVU
-    await replaceLatestMvuData(mvuData);
+      await replaceLatestMvuData(mvuData);
 
-    if (typeof toastr !== 'undefined') {
-      toastr.success(`兑换成功！消耗${goldCost}金币，获得${exchangeAmount.value}技能点`, '成功', { timeOut: 1500 });
-    }
+      if (typeof toastr !== 'undefined') {
+        toastr.success(`兑换成功！消耗${goldCost}金币，获得${skillPointReward}技能点`, '成功', { timeOut: 1500 });
+      }
 
-    // 重置兑换数量
-    exchangeAmount.value = 1;
+      // 重置兑换数量
+      exchangeAmount.value = 1;
+    });
   } catch (error) {
     console.error('[技能] 兑换失败:', error);
     if (typeof toastr !== 'undefined') {
@@ -780,6 +832,7 @@ async function performExchange() {
 // 执行天赋抽取
 async function performTalentGachaAction() {
   const cost = 10;
+  if (isSkillActionPending.value) return;
   if (skillPoints.value < cost) {
     if (typeof toastr !== 'undefined') {
       toastr.warning('技能点不足，需要10点', '提示', { timeOut: 2000 });
@@ -788,39 +841,40 @@ async function performTalentGachaAction() {
   }
 
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) return;
+    await runSkillAction('天赋抽取', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) return;
 
-    // 扣除技能点
-    if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
-    const currentSkillPoints = Number(mvuData.stat_data.核心状态.$技能点 || 0);
-    if (currentSkillPoints < cost) {
-      if (typeof toastr !== 'undefined') {
-        toastr.warning('技能点不足', '提示', { timeOut: 2000 });
+      // 扣除技能点
+      if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
+      const currentSkillPoints = Number(mvuData.stat_data.核心状态.$技能点 || 0);
+      if (currentSkillPoints < cost) {
+        if (typeof toastr !== 'undefined') {
+          toastr.warning('技能点不足', '提示', { timeOut: 2000 });
+        }
+        return;
       }
-      return;
-    }
-    mvuData.stat_data.核心状态.$技能点 = Math.max(0, currentSkillPoints - cost);
+      mvuData.stat_data.核心状态.$技能点 = currentSkillPoints - cost;
 
-    // 写回MVU
-    await replaceLatestMvuData(mvuData);
+      await replaceLatestMvuData(mvuData);
 
-    // 执行天赋抽取（传入堕落度）
-    const corruption = mvuData.stat_data.核心状态?.堕落度 || 0;
-    drawnTalent.value = performTalentGacha(corruption);
+      // 执行天赋抽取（传入堕落度）
+      const corruption = mvuData.stat_data.核心状态?.堕落度 || 0;
+      drawnTalent.value = performTalentGacha(corruption);
 
-    // 如果抽到SIN天赋，显示特殊暗黑效果
-    if (drawnTalent.value?.rarity === 'SIN') {
-      showSinEffect.value = true;
-      setTimeout(() => {
-        showSinEffect.value = false;
-      }, 3000);
-      if (typeof toastr !== 'undefined') {
-        toastr.error(`七宗罪降临...「${drawnTalent.value.name}」`, '⚠️ 罪与罚', { timeOut: 4000 });
+      // 如果抽到SIN天赋，显示特殊暗黑效果
+      if (drawnTalent.value?.rarity === 'SIN') {
+        showSinEffect.value = true;
+        setTimeout(() => {
+          showSinEffect.value = false;
+        }, 3000);
+        if (typeof toastr !== 'undefined') {
+          toastr.error(`七宗罪降临...「${drawnTalent.value.name}」`, '⚠️ 罪与罚', { timeOut: 4000 });
+        }
+      } else if (typeof toastr !== 'undefined') {
+        toastr.info(`抽取完成！消耗${cost}技能点`, '天赋抽取', { timeOut: 1500 });
       }
-    } else if (typeof toastr !== 'undefined') {
-      toastr.info(`抽取完成！消耗${cost}技能点`, '天赋抽取', { timeOut: 1500 });
-    }
+    });
   } catch (error) {
     console.error('[天赋] 抽取失败:', error);
     if (typeof toastr !== 'undefined') {
@@ -831,33 +885,35 @@ async function performTalentGachaAction() {
 
 // 确认替换天赋
 async function confirmReplaceTalent() {
-  if (!drawnTalent.value) return;
+  if (isSkillActionPending.value || !drawnTalent.value) return;
+  const talent = drawnTalent.value;
 
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) return;
+    await runSkillAction('替换天赋', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) return;
 
-    // 确保技能系统存在
-    if (!mvuData.stat_data.技能系统) mvuData.stat_data.技能系统 = {};
+      // 确保技能系统存在
+      if (!mvuData.stat_data.技能系统) mvuData.stat_data.技能系统 = {};
 
-    // 清空现有天赋，写入新天赋
-    mvuData.stat_data.技能系统.$天赋 = {
-      [drawnTalent.value.id]: {
-        天赋名称: drawnTalent.value.name,
-        天赋描述: drawnTalent.value.description,
-        天赋效果: drawnTalent.value.bonus,
-      },
-    };
+      // 清空现有天赋，写入新天赋
+      mvuData.stat_data.技能系统.$天赋 = {
+        [talent.id]: {
+          天赋名称: talent.name,
+          天赋描述: talent.description,
+          天赋效果: talent.bonus,
+        },
+      };
 
-    // 写回MVU
-    await replaceLatestMvuData(mvuData);
+      await replaceLatestMvuData(mvuData);
 
-    if (typeof toastr !== 'undefined') {
-      toastr.success(`成功获得天赋【${drawnTalent.value.name}】！`, '成功', { timeOut: 2000 });
-    }
+      if (typeof toastr !== 'undefined') {
+        toastr.success(`成功获得天赋【${talent.name}】！`, '成功', { timeOut: 2000 });
+      }
 
-    // 清空抽取结果
-    drawnTalent.value = null;
+      // 清空抽取结果
+      if (drawnTalent.value === talent) drawnTalent.value = null;
+    });
   } catch (error) {
     console.error('[天赋] 替换失败:', error);
     if (typeof toastr !== 'undefined') {
@@ -924,26 +980,30 @@ function toggleAuthorTest() {
 
 // 选择天赋进行测试
 async function selectTalentForTest(talent: TalentData) {
+  if (isSkillActionPending.value) return;
+
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData?.stat_data) return;
+    await runSkillAction('GM设置天赋', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData?.stat_data) return;
 
-    if (!mvuData.stat_data.技能系统) mvuData.stat_data.技能系统 = {};
+      if (!mvuData.stat_data.技能系统) mvuData.stat_data.技能系统 = {};
 
-    // 写入选择的天赋
-    mvuData.stat_data.技能系统.$天赋 = {
-      [talent.id]: {
-        天赋名称: talent.name,
-        天赋描述: talent.description,
-        天赋效果: talent.bonus,
-      },
-    };
+      // 写入选择的天赋
+      mvuData.stat_data.技能系统.$天赋 = {
+        [talent.id]: {
+          天赋名称: talent.name,
+          天赋描述: talent.description,
+          天赋效果: talent.bonus,
+        },
+      };
 
-    await replaceLatestMvuData(mvuData);
+      await replaceLatestMvuData(mvuData);
 
-    if (typeof toastr !== 'undefined') {
-      toastr.success(`已设置天赋【${talent.name}】`, '成功', { timeOut: 2000 });
-    }
+      if (typeof toastr !== 'undefined') {
+        toastr.success(`已设置天赋【${talent.name}】`, '成功', { timeOut: 2000 });
+      }
+    });
   } catch (error) {
     console.error('[作者测试] 设置天赋失败:', error);
     if (typeof toastr !== 'undefined') {
@@ -960,6 +1020,7 @@ function getTalentRarity(talentId: string): string {
 
 // 遗忘技能（带确认对话框）
 async function forgetSkill(skillId: string) {
+  if (isSkillActionPending.value) return;
   const skill = activeSkills.value[skillId];
   const skillName = skill?.基本信息?.技能名称 || '未知技能';
 
@@ -971,20 +1032,21 @@ async function forgetSkill(skillId: string) {
   }
 
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) return;
+    await runSkillAction('遗忘技能', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) return;
 
-    // 删除技能
-    if (mvuData.stat_data.技能系统?.主动技能?.[skillId]) {
-      delete mvuData.stat_data.技能系统.主动技能[skillId];
-    }
+      // 删除技能
+      if (mvuData.stat_data.技能系统?.主动技能?.[skillId]) {
+        delete mvuData.stat_data.技能系统.主动技能[skillId];
+      }
 
-    // 写回MVU
-    await replaceLatestMvuData(mvuData);
+      await replaceLatestMvuData(mvuData);
 
-    if (typeof toastr !== 'undefined') {
-      toastr.success(`技能「${skillName}」已遗忘`, '成功', { timeOut: 1500 });
-    }
+      if (typeof toastr !== 'undefined') {
+        toastr.success(`技能「${skillName}」已遗忘`, '成功', { timeOut: 1500 });
+      }
+    });
   } catch (error) {
     console.error('[技能] 遗忘失败:', error);
     if (typeof toastr !== 'undefined') {

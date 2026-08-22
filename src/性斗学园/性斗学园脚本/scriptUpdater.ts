@@ -1,6 +1,6 @@
 import { compare } from 'compare-versions';
 
-export const SCRIPT_VERSION = '3.6.5';
+export const SCRIPT_VERSION = '3.6.7';
 export const SCRIPT_UPDATE_EVENT = 'fatria-script-update-status';
 
 const JSDELIVR_HOST = 'cdn.jsdelivr.net';
@@ -123,9 +123,9 @@ export async function checkScriptUpdate(options: CheckScriptUpdateOptions = {}):
       isUsingMutableReference,
       status: hasUpdate ? 'available' : 'latest',
       message: hasNewerVersion
-        ? `发现新版本 v${latestVersion}，请清除浏览器缓存后刷新浏览器。（帖子内标注也有只刷新单个脚本缓存的办法）`
+        ? `发现新版本 v${latestVersion}，点击“更新至 v${latestVersion}”即可自动切换并重新加载。`
         : isUsingMutableReference
-          ? `当前使用 @main 链接，可固定到 v${latestVersion} 以避免后续缓存延迟。`
+          ? `当前使用 @main 链接，点击更新按钮即可固定到 v${latestVersion}，避免缓存延迟。`
           : `当前已是最新版 v${SCRIPT_VERSION}。`,
       checkedAt: now,
       manifest,
@@ -267,7 +267,7 @@ function notifyAvailableScriptUpdate(
   }
 
   if (!options.silent) {
-    notifyInfo(`发现脚本新版本 v${latestVersion}，请清除浏览器缓存后重新加载。`);
+    notifyInfo(`发现脚本新版本 v${latestVersion}，点击更新按钮即可自动切换并重新加载。`);
   }
 }
 
@@ -308,9 +308,9 @@ function applyCachedUpdateState(cache: ScriptUpdateCache): void {
     isUsingMutableReference,
     status: hasUpdate ? 'available' : 'latest',
     message: hasNewerVersion
-      ? `发现新版本 v${latestVersion}，请清除浏览器缓存后重新加载脚本。`
+      ? `发现新版本 v${latestVersion}，点击“更新至 v${latestVersion}”即可自动切换并重新加载。`
       : isUsingMutableReference
-        ? `当前使用 @main 链接，可固定到 v${latestVersion} 以避免后续缓存延迟。`
+        ? `当前使用 @main 链接，点击更新按钮即可固定到 v${latestVersion}，避免缓存延迟。`
         : `当前已是最新版 v${SCRIPT_VERSION}。`,
     checkedAt: cache.lastCheckedAt,
     manifest:
@@ -463,13 +463,14 @@ function buildUpdateGuideText(manifest: ScriptUpdateManifest): string {
     '',
     `当前运行版本：v${SCRIPT_VERSION}`,
     '',
-    '在设置页点击“更新至指定版本”后，脚本会尝试把角色脚本库中的官方 jsDelivr 链接改为固定发布标签。',
+    '在设置页点击“更新至指定版本”后，脚本会自动将角色脚本库中的官方 jsDelivr 链接切换为固定发布标签，并重新加载。',
     '如果当前条目不是官方外链、是内联脚本，或发布标签尚不可用，则不会自动改写。',
     '',
     '常用处理方法：',
     '1. 优先点击设置页的“更新至指定版本”。',
-    '2. 如果按钮提示当前条目不是官方外链，请手动将 import 改为带 `@vX.Y.Z` 的固定版本链接。',
-    '3. 若发布标签尚不可用，请等待发布完成后再检查更新。',
+    '2. 不需要清除浏览器缓存；固定发布标签会直接请求对应版本。',
+    '3. 如果按钮提示当前条目不是官方外链，请手动将 import 改为带 `@vX.Y.Z` 的固定版本链接。',
+    '4. 若发布标签尚不可用，请等待发布完成后再检查更新。',
     changelogText,
   ].join('\n');
 }

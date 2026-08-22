@@ -1,4 +1,35 @@
 const LATEST_MESSAGE_OPTION: VariableOption = { type: 'message', message_id: 'latest' };
+let latestMvuTransactionTail: Promise<void> = Promise.resolve();
+
+/**
+ * Serialize read-modify-write operations on the latest MVU data.
+ *
+ * Mvu.replaceMvuData replaces the complete data object. Running two mutations
+ * concurrently therefore allows a later write based on an older snapshot to
+ * overwrite the earlier mutation. Interactive mutations must use this helper.
+ */
+export async function runLatestMvuTransaction<T>(operationName: string, operation: () => T | Promise<T>): Promise<T> {
+  const previousTransaction = latestMvuTransactionTail;
+  const transaction = previousTransaction
+    .catch(() => undefined)
+    .then(async () => {
+      const startedAt = performance.now();
+      try {
+        return await operation();
+      } finally {
+        const elapsed = Math.round(performance.now() - startedAt);
+        if (elapsed >= 250) {
+          console.info(`[性斗学园] MVU事务完成：${operationName}（${elapsed}ms）`);
+        }
+      }
+    });
+
+  latestMvuTransactionTail = transaction.then(
+    () => undefined,
+    () => undefined,
+  );
+  return transaction;
+}
 
 export const FORBIDDEN_MVU_PATHS = [
   '角色基础.$头像URL',
@@ -164,48 +195,52 @@ export async function replaceLatestMvuData(mvuData: Mvu.MvuData): Promise<void> 
 export async function updateLatestMvuData(
   updater: (mvuData: Mvu.MvuData) => void | Promise<void>,
 ): Promise<Mvu.MvuData | null> {
-  const mvuData = await getLatestMvuData();
-  if (!mvuData) {
-    return null;
-  }
+  return runLatestMvuTransaction('通用数据更新', async () => {
+    const mvuData = await getLatestMvuData();
+    if (!mvuData) {
+      return null;
+    }
 
-  if (!mvuData.stat_data) {
-    mvuData.stat_data = {};
-  }
+    if (!mvuData.stat_data) {
+      mvuData.stat_data = {};
+    }
 
-  await updater(mvuData);
-  await replaceLatestMvuData(mvuData);
-  return mvuData;
+    await updater(mvuData);
+    await replaceLatestMvuData(mvuData);
+    return mvuData;
+  });
 }
 
 export async function updateLatestStatData(updates: Record<string, any>): Promise<void> {
-  if (!(await waitForMvu())) {
-    return;
-  }
-
-  const mvuData = Mvu.getMvuData(LATEST_MESSAGE_OPTION);
-  if (!mvuData) {
-    console.error('[性斗学园] 无法获取 MVU 数据');
-    return;
-  }
-
-  if (!mvuData.stat_data) {
-    mvuData.stat_data = {};
-  }
-
-  let hasAllowedUpdate = false;
-  for (const [path, value] of Object.entries(updates)) {
-    if (isForbiddenMvuPath(path)) {
-      console.warn(`[性斗学园] 已阻止写入废弃 MVU 路径：${path}`);
-      continue;
+  await runLatestMvuTransaction('通用状态更新', async () => {
+    if (!(await waitForMvu())) {
+      return;
     }
-    setPath(mvuData.stat_data, path, value);
-    hasAllowedUpdate = true;
-  }
 
-  if (!hasAllowedUpdate) {
-    return;
-  }
+    const mvuData = Mvu.getMvuData(LATEST_MESSAGE_OPTION);
+    if (!mvuData) {
+      console.error('[性斗学园] 无法获取 MVU 数据');
+      return;
+    }
 
-  await replaceLatestMvuData(mvuData);
+    if (!mvuData.stat_data) {
+      mvuData.stat_data = {};
+    }
+
+    let hasAllowedUpdate = false;
+    for (const [path, value] of Object.entries(updates)) {
+      if (isForbiddenMvuPath(path)) {
+        console.warn(`[性斗学园] 已阻止写入废弃 MVU 路径：${path}`);
+        continue;
+      }
+      setPath(mvuData.stat_data, path, value);
+      hasAllowedUpdate = true;
+    }
+
+    if (!hasAllowedUpdate) {
+      return;
+    }
+
+    await replaceLatestMvuData(mvuData);
+  });
 }

@@ -2,7 +2,13 @@
   <div class="backstreet-page">
     <aside v-if="!activeContact" class="contact-panel" :class="{ 'group-mode': activeThreadKind === 'group' }">
       <div class="contact-toolbar">
-        <button class="home-back-btn" type="button" title="返回主菜单" aria-label="返回主菜单" @click="emit('backHome')">
+        <button
+          class="home-back-btn"
+          type="button"
+          title="返回主菜单"
+          aria-label="返回主菜单"
+          @click="emit('backHome')"
+        >
           <i class="fas fa-chevron-left"></i>
         </button>
         <div class="search-row">
@@ -264,7 +270,13 @@
           >
             <i class="fas fa-user-gear"></i>
           </button>
-          <button class="header-action-btn" type="button" title="刷新" aria-label="刷新" @click="loadThread(activeContact)">
+          <button
+            class="header-action-btn"
+            type="button"
+            title="刷新"
+            aria-label="刷新"
+            @click="loadThread(activeContact)"
+          >
             <i class="fas fa-rotate"></i>
           </button>
         </div>
@@ -328,7 +340,12 @@
         </div>
 
         <div class="group-danger-row">
-          <button class="group-dissolve-btn" type="button" :disabled="isUpdatingGroup || activeIsDissolved" @click="dissolveGroup">
+          <button
+            class="group-dissolve-btn"
+            type="button"
+            :disabled="isUpdatingGroup || activeIsDissolved"
+            @click="dissolveGroup"
+          >
             <i class="fas fa-user-xmark"></i>
             <span>{{ activeIsDissolved ? '已解散' : '解散' }}</span>
           </button>
@@ -416,7 +433,9 @@
                   <i class="fas fa-trash-can"></i>
                 </button>
               </div>
-              <div v-if="activeIsGroup && message.sender === 'contact'" class="message-speaker">{{ messageSpeaker(message) }}</div>
+              <div v-if="activeIsGroup && message.sender === 'contact'" class="message-speaker">
+                {{ messageSpeaker(message) }}
+              </div>
               <div v-if="isImageMessage(message)" class="message-image-block">
                 <button
                   v-if="getMessageImageUrl(message)"
@@ -436,7 +455,10 @@
                   <i class="fas fa-spinner"></i>
                   <span>图片载入中</span>
                 </div>
-                <div v-if="message.sender === 'user' && message.imageHiddenFromPrompt" class="message-image-prompt-state">
+                <div
+                  v-if="message.sender === 'user' && message.imageHiddenFromPrompt"
+                  class="message-image-prompt-state"
+                >
                   <i class="fas fa-eye-slash"></i>
                   <span>已隐藏，不发送给 AI</span>
                 </div>
@@ -564,7 +586,12 @@
                 <img :src="sticker.url" :alt="sticker.name" loading="lazy" />
               </button>
               <div v-if="isLoadingStickers" class="sticker-state">加载中</div>
-              <button v-else-if="stickerLoadError" class="sticker-state retry" type="button" @mousedown.prevent="loadStickerManifest(true)">
+              <button
+                v-else-if="stickerLoadError"
+                class="sticker-state retry"
+                type="button"
+                @mousedown.prevent="loadStickerManifest(true)"
+              >
                 重新加载
               </button>
               <div v-else-if="stickerOptions.length === 0" class="sticker-state">暂无表情包</div>
@@ -572,7 +599,11 @@
           </div>
         </div>
         <div v-if="pendingImageAttachments.length > 0" class="composer-attachment-preview">
-          <div v-for="(attachment, index) in pendingImageAttachments" :key="attachment.previewUrl" class="composer-attachment-item">
+          <div
+            v-for="(attachment, index) in pendingImageAttachments"
+            :key="attachment.previewUrl"
+            class="composer-attachment-item"
+          >
             <img :src="attachment.previewUrl" :alt="attachment.file.name" />
             <span>{{ attachment.file.name }}</span>
             <button type="button" title="移除图片" aria-label="移除图片" @click="removePendingImageAttachment(index)">
@@ -619,7 +650,14 @@
         <button class="composer-send" type="submit" title="发送" aria-label="发送" :disabled="!canSendMessage">
           <i class="fas fa-paper-plane"></i>
         </button>
-        <input ref="imageInputRef" class="composer-file-input" type="file" accept="image/*" multiple @change="handleImageFileSelected" />
+        <input
+          ref="imageInputRef"
+          class="composer-file-input"
+          type="file"
+          accept="image/*"
+          multiple
+          @change="handleImageFileSelected"
+        />
       </form>
     </section>
   </div>
@@ -710,7 +748,7 @@ import {
   saveIndexedImageBlob,
 } from '../../../shared/indexedImageStore';
 import { PLAYER_AVATAR_UPDATED_EVENT, resolveStoredPlayerAvatar } from '../../../shared/localPreferences';
-import { getLatestMvuData, replaceLatestMvuData } from '../../../shared/mvuStore';
+import { getLatestMvuData, replaceLatestMvuData, runLatestMvuTransaction } from '../../../shared/mvuStore';
 import {
   AVATAR_VARIATIONS_UPDATED_EVENT,
   filterAvailableAvatarVariationOptions,
@@ -739,7 +777,8 @@ const STICKER_MANIFEST_SCRIPT_URL = `${STICKER_MANIFEST_BASE_URL}manifest.js`;
 const STICKER_MANIFEST_JSON_URL = `${STICKER_MANIFEST_BASE_URL}manifest.json`;
 const STICKER_MANIFEST_GLOBAL = 'FATRIA_BACKSTREET_STICKERS';
 const STICKER_PROMPT_STORAGE_KEY = 'fatria-backstreet-sticker-hidden-from-prompt-v1';
-const STICKER_PROMPT_TOGGLE_HELP = '适用于非多模态模型：勾选后聊天里仍显示表情包，但发送给 AI 的内容会改为文字描述，不再发送图片输入。';
+const STICKER_PROMPT_TOGGLE_HELP =
+  '适用于非多模态模型：勾选后聊天里仍显示表情包，但发送给 AI 的内容会改为文字描述，不再发送图片输入。';
 const EMOJI_OPTIONS = [
   '😀',
   '😄',
@@ -858,7 +897,9 @@ let isComposerComposing = false;
 
 const privateContacts = computed(() => contacts.value.filter(contact => contact.type !== 'group'));
 const groupContacts = computed(() => contacts.value.filter(contact => contact.type === 'group'));
-const currentThreadContacts = computed(() => (activeThreadKind.value === 'group' ? groupContacts.value : privateContacts.value));
+const currentThreadContacts = computed(() =>
+  activeThreadKind.value === 'group' ? groupContacts.value : privateContacts.value,
+);
 const searchPlaceholder = computed(() => (activeThreadKind.value === 'group' ? '搜索群聊' : '搜索联系人'));
 const emptyContactText = computed(() => (activeThreadKind.value === 'group' ? '没有群聊' : '没有联系人'));
 const groupLaunchMeta = computed(() =>
@@ -891,11 +932,15 @@ const inviteMemberChoices = computed(() => {
   const memberSet = new Set(activeMembers.value);
   return privateContacts.value.filter(contact => !memberSet.has(contact.name));
 });
-const canCreateGroup = computed(() => groupNameDraft.value.trim().length > 0 && selectedGroupMembers.value.length >= 2 && !isCreatingGroup.value);
+const canCreateGroup = computed(
+  () => groupNameDraft.value.trim().length > 0 && selectedGroupMembers.value.length >= 2 && !isCreatingGroup.value,
+);
 const canInviteMembers = computed(
   () => selectedInviteMembers.value.length > 0 && !isUpdatingGroup.value && !activeIsDissolved.value,
 );
-const canAddPrivateContact = computed(() => normalizeContactName(contactNameDraft.value).length > 0 && !isAddingContact.value);
+const canAddPrivateContact = computed(
+  () => normalizeContactName(contactNameDraft.value).length > 0 && !isAddingContact.value,
+);
 const composerPlaceholder = computed(() => (activeIsDissolved.value ? '群聊已解散' : '发送消息…'));
 const canSendMessage = computed(
   () =>
@@ -912,7 +957,11 @@ const mentionCandidates = computed(() => {
   return matchedMembers.slice(0, 8);
 });
 const showMentionPanel = computed(
-  () => activeIsGroup.value && !activeIsDissolved.value && mentionStartIndex.value >= 0 && mentionCandidates.value.length > 0,
+  () =>
+    activeIsGroup.value &&
+    !activeIsDissolved.value &&
+    mentionStartIndex.value >= 0 &&
+    mentionCandidates.value.length > 0,
 );
 
 watch(
@@ -1169,7 +1218,9 @@ function openStickerTab() {
 
 function readCurrentChatId(): string {
   const hostWindow = getHostWindow();
-  return String(hostWindow.SillyTavern?.getCurrentChatId?.() || (globalThis as any).SillyTavern?.getCurrentChatId?.() || '').trim();
+  return String(
+    hostWindow.SillyTavern?.getCurrentChatId?.() || (globalThis as any).SillyTavern?.getCurrentChatId?.() || '',
+  ).trim();
 }
 
 function resetForChatChange() {
@@ -1249,7 +1300,9 @@ function revokeMessageImageUrls() {
 
 async function syncMessageImageUrls() {
   const syncId = ++messageImageSyncId;
-  const refs = Array.from(new Set(messages.value.map(message => message.imageRef?.trim()).filter((ref): ref is string => Boolean(ref))));
+  const refs = Array.from(
+    new Set(messages.value.map(message => message.imageRef?.trim()).filter((ref): ref is string => Boolean(ref))),
+  );
   const previous = messageImageUrls.value;
   const next: Record<string, string> = {};
 
@@ -1341,7 +1394,11 @@ function getImageFilesFromClipboard(data: DataTransfer | null): File[] {
     const file = item.getAsFile();
     if (!file) continue;
     const extension = file.type.split('/')[1] || 'png';
-    files.push(file.name ? file : new File([file], `clipboard-image-${Date.now()}-${files.length + 1}.${extension}`, { type: file.type }));
+    files.push(
+      file.name
+        ? file
+        : new File([file], `clipboard-image-${Date.now()}-${files.length + 1}.${extension}`, { type: file.type }),
+    );
   }
   if (files.length > 0) return files;
 
@@ -1491,7 +1548,8 @@ async function sendMessage() {
   const contact = activeContact.value;
   if (isComposerComposing) return;
   const text = getComposerText();
-  if (!contact || (!text && pendingImageAttachments.value.length === 0) || isSending.value || activeIsDissolved.value) return;
+  if (!contact || (!text && pendingImageAttachments.value.length === 0) || isSending.value || activeIsDissolved.value)
+    return;
 
   draft.value = '';
   hideMentionPanel();
@@ -1586,7 +1644,11 @@ async function toggleUserImagePromptHidden(message: BackstreetMessage) {
 
   try {
     errorText.value = '';
-    messages.value = await backstreetService.setUserImagePromptHidden(contact, message.id, !message.imageHiddenFromPrompt);
+    messages.value = await backstreetService.setUserImagePromptHidden(
+      contact,
+      message.id,
+      !message.imageHiddenFromPrompt,
+    );
     await loadContacts();
   } catch (error) {
     console.error('[后街页面] 图片提示词隐藏设置失败:', error);
@@ -1635,7 +1697,9 @@ function closeGroupCreator() {
 }
 
 function normalizeContactName(rawName: string): string {
-  return String(rawName || '').trim().replace(/\s+/g, ' ');
+  return String(rawName || '')
+    .trim()
+    .replace(/\s+/g, ' ');
 }
 
 function openContactCreator() {
@@ -1658,45 +1722,49 @@ async function addPrivateContact() {
   isAddingContact.value = true;
   errorText.value = '';
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData) throw new Error('无法读取 MVU 变量');
-    if (!mvuData.stat_data) mvuData.stat_data = {};
+    await runLatestMvuTransaction('后街添加联系人', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData) throw new Error('无法读取 MVU 变量');
+      if (!mvuData.stat_data) mvuData.stat_data = {};
 
-    const statData = mvuData.stat_data as Record<string, any>;
-    const relationSystem =
-      statData.关系系统 && typeof statData.关系系统 === 'object' && !Array.isArray(statData.关系系统)
-        ? statData.关系系统
-        : {};
-    statData.关系系统 = relationSystem;
+      const statData = mvuData.stat_data as Record<string, any>;
+      const relationSystem =
+        statData.关系系统 && typeof statData.关系系统 === 'object' && !Array.isArray(statData.关系系统)
+          ? statData.关系系统
+          : {};
+      statData.关系系统 = relationSystem;
 
-    const existingRelation = relationSystem[name];
-    if (existingRelation && typeof existingRelation === 'object' && !Array.isArray(existingRelation)) {
-      relationSystem[name] = { 好感度: 0, 支配度: 0, 誓约: '无', 关系类型: '朋友', ...existingRelation };
-      if (!relationSystem[name].关系类型 || relationSystem[name].关系类型 === '陌生人') {
-        relationSystem[name].关系类型 = '朋友';
+      const existingRelation = relationSystem[name];
+      if (existingRelation && typeof existingRelation === 'object' && !Array.isArray(existingRelation)) {
+        relationSystem[name] = { 好感度: 0, 支配度: 0, 誓约: '无', 关系类型: '朋友', ...existingRelation };
+        if (!relationSystem[name].关系类型 || relationSystem[name].关系类型 === '陌生人') {
+          relationSystem[name].关系类型 = '朋友';
+        }
+        if (relationSystem[name].支配度 === undefined) {
+          relationSystem[name].支配度 = 0;
+        }
+        if (!relationSystem[name].誓约) {
+          relationSystem[name].誓约 = '无';
+        }
+      } else {
+        relationSystem[name] = { 好感度: 0, 支配度: 0, 誓约: '无', 关系类型: '朋友' };
       }
-      if (relationSystem[name].支配度 === undefined) {
-        relationSystem[name].支配度 = 0;
-      }
-      if (!relationSystem[name].誓约) {
-        relationSystem[name].誓约 = '无';
-      }
-    } else {
-      relationSystem[name] = { 好感度: 0, 支配度: 0, 誓约: '无', 关系类型: '朋友' };
-    }
 
-    await replaceLatestMvuData(mvuData);
-    window.dispatchEvent(new CustomEvent('mvu-data-updated', { detail: { source: 'backstreet-add-contact', contact: name } }));
-    await loadContacts(statData);
-    closeContactCreator();
-    const contact = contacts.value.find(item => item.type !== 'group' && item.name === name) || {
-      id: name,
-      name,
-      lastMessage: '',
-      lastTime: '',
-      type: 'private' as const,
-    };
-    await selectContact(contact);
+      await replaceLatestMvuData(mvuData);
+      window.dispatchEvent(
+        new CustomEvent('mvu-data-updated', { detail: { source: 'backstreet-add-contact', contact: name } }),
+      );
+      await loadContacts(statData);
+      closeContactCreator();
+      const contact = contacts.value.find(item => item.type !== 'group' && item.name === name) || {
+        id: name,
+        name,
+        lastMessage: '',
+        lastTime: '',
+        type: 'private' as const,
+      };
+      await selectContact(contact);
+    });
   } catch (error) {
     console.error('[后街页面] 添加联系人失败:', error);
     errorText.value = error instanceof Error ? error.message : '添加联系人失败';
@@ -2090,14 +2158,20 @@ function getPreferredAvatarMode(fullName: string): BackstreetAvatarMode {
   return contactAvatarModes.value[getAvatarRecordKey(fullName)] || defaultAvatarMode.value;
 }
 
-function resolveAvatarDisplay(name: string): { mode: BackstreetAvatarMode | 'variation'; avatarName: string; url: string } | null {
+function resolveAvatarDisplay(
+  name: string,
+): { mode: BackstreetAvatarMode | 'variation'; avatarName: string; url: string } | null {
   const fullName = resolveAvatarFullName(name);
   if (!fullName) return null;
 
   const recordKey = getAvatarRecordKey(fullName);
   const selectedUrl = selectedAvatarUrls.value[recordKey];
   const selectedKey = selectedAvatarKeys.value[recordKey];
-  if (selectedUrl && selectedKey && !failedAvatars.value.has(getAvatarFailureKey('variation', `${recordKey}:${selectedKey}`))) {
+  if (
+    selectedUrl &&
+    selectedKey &&
+    !failedAvatars.value.has(getAvatarFailureKey('variation', `${recordKey}:${selectedKey}`))
+  ) {
     return {
       mode: 'variation',
       avatarName: `${recordKey}:${selectedKey}`,
@@ -2221,7 +2295,10 @@ const currentModalAvatarSlide = computed<ModalAvatarSlide>(() => {
   );
 });
 
-function findModalAvatarSlideIndex(slides: ModalAvatarSlide[], target: Pick<ModalAvatarSlide, 'kind' | 'variationKey'>): number {
+function findModalAvatarSlideIndex(
+  slides: ModalAvatarSlide[],
+  target: Pick<ModalAvatarSlide, 'kind' | 'variationKey'>,
+): number {
   return slides.findIndex(slide => slide.kind === target.kind && slide.variationKey === target.variationKey);
 }
 
@@ -2276,7 +2353,9 @@ async function refreshAvatarVariationState(preserveModalIndex = false) {
   // applied immediately; unavailable differences are verified only in the picker.
   for (const item of metadata) {
     if (!item) continue;
-    const isSelectedUnlocked = Boolean(item.selectedKey && item.options.some(option => option.key === item.selectedKey));
+    const isSelectedUnlocked = Boolean(
+      item.selectedKey && item.options.some(option => option.key === item.selectedKey),
+    );
     if (item.selectedUrl && item.selectedKey && isSelectedUnlocked) {
       nextUrls[item.config.characterName] = item.selectedUrl;
       nextKeys[item.config.characterName] = item.selectedKey;
@@ -2380,13 +2459,11 @@ function closeAvatarModal() {
 function handleModalImageError(event: Event) {
   const recordKey = getAvatarRecordKey(modalCharacterName.value);
   const slide = currentModalAvatarSlide.value;
-  const avatarName = slide.kind === 'variation' && slide.variationKey ? `${recordKey}:${slide.variationKey}` : modalCharacterName.value;
+  const avatarName =
+    slide.kind === 'variation' && slide.variationKey ? `${recordKey}:${slide.variationKey}` : modalCharacterName.value;
   const image = event.currentTarget as HTMLImageElement;
   console.warn(`[后街页面] 头像加载失败：${image.currentSrc || image.src}`);
-  failedAvatars.value = new Set([
-    ...failedAvatars.value,
-    getAvatarFailureKey(slide.kind, avatarName),
-  ]);
+  failedAvatars.value = new Set([...failedAvatars.value, getAvatarFailureKey(slide.kind, avatarName)]);
 }
 
 function contactInitial(name: string): string {
@@ -2486,9 +2563,7 @@ async function scrollToBottom() {
   align-items: center;
   gap: 10px;
   color: #fff;
-  background:
-    linear-gradient(135deg, rgba(20, 184, 166, 0.17), rgba(99, 102, 241, 0.18)),
-    rgba(8, 12, 24, 0.5);
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.17), rgba(99, 102, 241, 0.18)), rgba(8, 12, 24, 0.5);
   box-shadow:
     0 10px 24px rgba(6, 182, 212, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.12);
@@ -2501,24 +2576,18 @@ async function scrollToBottom() {
 
   &:hover {
     border-color: rgba(125, 211, 252, 0.38);
-    background:
-      linear-gradient(135deg, rgba(20, 184, 166, 0.24), rgba(99, 102, 241, 0.23)),
-      rgba(8, 12, 24, 0.56);
+    background: linear-gradient(135deg, rgba(20, 184, 166, 0.24), rgba(99, 102, 241, 0.23)), rgba(8, 12, 24, 0.56);
     transform: translateY(-1px);
   }
 }
 
 .contact-launch-card {
   border-color: rgba(167, 243, 208, 0.22);
-  background:
-    linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(125, 211, 252, 0.14)),
-    rgba(8, 12, 24, 0.5);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(125, 211, 252, 0.14)), rgba(8, 12, 24, 0.5);
 
   &:hover {
     border-color: rgba(167, 243, 208, 0.38);
-    background:
-      linear-gradient(135deg, rgba(16, 185, 129, 0.23), rgba(125, 211, 252, 0.2)),
-      rgba(8, 12, 24, 0.56);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.23), rgba(125, 211, 252, 0.2)), rgba(8, 12, 24, 0.56);
   }
 }
 
@@ -2577,9 +2646,7 @@ async function scrollToBottom() {
   border: 1px solid rgba(125, 211, 252, 0.18);
   border-radius: 18px;
   padding: 12px;
-  background:
-    linear-gradient(155deg, rgba(15, 23, 42, 0.82), rgba(30, 41, 59, 0.58)),
-    rgba(10, 14, 28, 0.54);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.82), rgba(30, 41, 59, 0.58)), rgba(10, 14, 28, 0.54);
   box-shadow:
     0 14px 34px rgba(0, 0, 0, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
@@ -3834,8 +3901,7 @@ async function scrollToBottom() {
   color: #fff;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
-  transition:
-    background 0.15s ease;
+  transition: background 0.15s ease;
 
   i {
     font-size: 10px;
@@ -4049,9 +4115,7 @@ async function scrollToBottom() {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background:
-    linear-gradient(155deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.78)),
-    rgba(10, 14, 28, 0.82);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.78)), rgba(10, 14, 28, 0.82);
   box-shadow:
     0 16px 38px rgba(0, 0, 0, 0.32),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
@@ -4121,9 +4185,7 @@ async function scrollToBottom() {
   border: 1px solid rgba(251, 191, 36, 0.22);
   border-radius: 16px;
   padding: 8px;
-  background:
-    linear-gradient(155deg, rgba(15, 23, 42, 0.94), rgba(42, 31, 55, 0.78)),
-    rgba(10, 14, 28, 0.86);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.94), rgba(42, 31, 55, 0.78)), rgba(10, 14, 28, 0.86);
   box-shadow:
     0 16px 38px rgba(0, 0, 0, 0.34),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
@@ -4257,9 +4319,7 @@ async function scrollToBottom() {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 6px;
-  background:
-    linear-gradient(155deg, rgba(15, 23, 42, 0.97), rgba(42, 31, 55, 0.9)),
-    rgba(10, 14, 28, 0.94);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.97), rgba(42, 31, 55, 0.9)), rgba(10, 14, 28, 0.94);
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.36);
   pointer-events: none;
   z-index: 4;
@@ -4369,9 +4429,7 @@ async function scrollToBottom() {
   flex-direction: column;
   gap: 9px;
   color: #e0f2fe;
-  background:
-    linear-gradient(155deg, rgba(15, 23, 42, 0.94), rgba(24, 43, 63, 0.84)),
-    rgba(10, 14, 28, 0.9);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.94), rgba(24, 43, 63, 0.84)), rgba(10, 14, 28, 0.9);
   box-shadow:
     0 16px 38px rgba(0, 0, 0, 0.34),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
@@ -4488,8 +4546,6 @@ async function scrollToBottom() {
 .composer-file-input {
   display: none;
 }
-
-
 
 /* ═══════════════════════════════════════════════════════
    Error & Empty States

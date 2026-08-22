@@ -416,10 +416,10 @@
           </div>
         </div>
         <div class="modal-footer shop-detail-footer">
-          <button class="cancel-btn" @click="selectedItem = null">取消</button>
+          <button class="cancel-btn" :disabled="isPurchasing" @click="selectedItem = null">取消</button>
           <button
             class="confirm-btn"
-            :disabled="!selectedItem || goldCoins < getDiscountedPrice(selectedItem) * purchaseQuantity"
+            :disabled="isPurchasing || !selectedItem || goldCoins < getDiscountedPrice(selectedItem) * purchaseQuantity"
             @click="purchaseItem"
           >
             <i class="fas fa-shopping-cart"></i>
@@ -438,7 +438,7 @@ import {
   saveSpecialBattleUnlocked,
 } from '../../../shared/localPreferences';
 import { getCombatConsumableEffects } from '../../../shared/combatConsumables';
-import { getLatestMvuData, replaceLatestMvuData } from '../../../shared/mvuStore';
+import { getLatestMvuData, replaceLatestMvuData, runLatestMvuTransaction } from '../../../shared/mvuStore';
 import { getPlayerDerivedStats } from '../../../shared/statSelectors';
 import { GRAND_WHEEL_SSS_EQUIPMENT_ITEMS } from '../../../shared/legendaryEquipment';
 import { grandWheelFetishPool, type FetishEntry } from '../../data/fetishPool';
@@ -3706,6 +3706,7 @@ const wheelRotation = ref(0);
 const wheelLastResultText = ref('');
 const wheelSssEffect = ref<WheelSssEffectState | null>(null);
 const isWheelDrawing = ref(false);
+const isPurchasing = ref(false);
 const fetishDecisionModalVisible = ref(false);
 const pendingFetishDecision = ref<FetishEntry | null>(null);
 const fetishDecisionResolver = ref<((choice: FetishDecision) => void) | null>(null);
@@ -3728,13 +3729,13 @@ const tenDrawCostLabel = computed(() => {
   return config.currency === 'gold' ? `${config.tenCost} 金币` : `${config.tenCost} 抽奖卷`;
 });
 const canDrawSingle = computed(() => {
-  if (isWheelDrawing.value) return false;
+  if (isWheelDrawing.value || isPurchasing.value) return false;
   const config = currentWheelConfig.value;
   if (config.currency === 'gold') return goldCoins.value >= config.singleCost;
   return totalLotteryTickets.value >= config.singleCost;
 });
 const canDrawTen = computed(() => {
-  if (isWheelDrawing.value) return false;
+  if (isWheelDrawing.value || isPurchasing.value) return false;
   const config = currentWheelConfig.value;
   if (config.currency === 'gold') return goldCoins.value >= config.tenCost;
   return totalLotteryTickets.value >= config.tenCost;
@@ -4081,18 +4082,17 @@ function addPermanentState(statData: any, stateName: string, bonus: Record<strin
   };
 }
 
-async function resolveFetishReward(initialFetish: FetishEntry, statData: any): Promise<string> {
+async function resolveFetishReward(initialFetish: FetishEntry): Promise<{ text: string; keptFetish?: FetishEntry }> {
   let current = initialFetish;
   while (true) {
     const choice = await openFetishDecisionModal(current);
     if (choice === 'discard') {
       pendingFetishDecision.value = null;
-      return `放弃永久状态「${current.name}」`;
+      return { text: `放弃永久状态「${current.name}」` };
     }
     if (choice === 'keep') {
-      addPermanentState(statData, current.name, current.bonuses, '商店大转盘获得的永久状态');
       pendingFetishDecision.value = null;
-      return `永久状态「${current.name}」`;
+      return { text: `永久状态「${current.name}」`, keptFetish: current };
     }
     current = pickRandomFetish(current.name);
     if (typeof toastr !== 'undefined') {
@@ -4254,7 +4254,7 @@ function applyWheelReward(segmentId: WheelSegmentId, statData: any): WheelReward
 }
 
 async function drawWheel(times: 1 | 10) {
-  if (isWheelDrawing.value) return;
+  if (isWheelDrawing.value || isPurchasing.value) return;
 
   const isTenDraw = times === 10;
 
@@ -4262,47 +4262,72 @@ async function drawWheel(times: 1 | 10) {
   clearWheelSssEffectTimer();
   wheelSssEffect.value = null;
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) return;
-
-    ensureShopStatData(mvuData.stat_data);
-    const config = currentWheelConfig.value;
-    const cost = isTenDraw ? config.tenCost : config.singleCost;
-
-    if (config.currency === 'gold') {
-      if ((mvuData.stat_data.物品系统.学园金币 || 0) < cost) {
-        if (typeof toastr !== 'undefined') toastr.error('金币不足，无法抽奖', '抽奖失败');
-        return;
-      }
-      mvuData.stat_data.物品系统.学园金币 -= cost;
-    } else if (!consumeLotteryTickets(mvuData.stat_data.物品系统.背包, cost)) {
-      if (typeof toastr !== 'undefined') toastr.error('抽奖卷不足，无法抽奖', '抽奖失败');
-      return;
-    }
-
-    const luck = getPlayerDerivedStats(mvuData.stat_data || {}).luck;
-    const rareMultiplier = getRareMultiplierByLuck(luck);
     const drawResults: Array<{ segment: WheelSegment } & WheelRewardResult> = [];
     const pendingFetishRewards: Array<{ resultIndex: number; fetish: FetishEntry }> = [];
+    let drawnSegments: WheelSegment[] = [];
 
-    for (let i = 0; i < times; i++) {
-      const hitSegment = rollWheelSegment(config.segments, rareMultiplier);
-      const rewardResult = applyWheelReward(hitSegment.id, mvuData.stat_data);
-      drawResults.push({ segment: hitSegment, ...rewardResult });
-      if (rewardResult.pendingFetish) {
-        pendingFetishRewards.push({ resultIndex: i, fetish: rewardResult.pendingFetish });
+    await runLatestMvuTransaction('商店转盘抽取', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) return;
+
+      ensureShopStatData(mvuData.stat_data);
+      const config = currentWheelConfig.value;
+      const cost = isTenDraw ? config.tenCost : config.singleCost;
+      drawnSegments = config.segments;
+
+      if (config.currency === 'gold') {
+        if ((mvuData.stat_data.物品系统.学园金币 || 0) < cost) {
+          if (typeof toastr !== 'undefined') toastr.error('金币不足，无法抽奖', '抽奖失败');
+          return;
+        }
+        mvuData.stat_data.物品系统.学园金币 -= cost;
+      } else if (!consumeLotteryTickets(mvuData.stat_data.物品系统.背包, cost)) {
+        if (typeof toastr !== 'undefined') toastr.error('抽奖卷不足，无法抽奖', '抽奖失败');
+        return;
+      }
+
+      const luck = getPlayerDerivedStats(mvuData.stat_data || {}).luck;
+      const rareMultiplier = getRareMultiplierByLuck(luck);
+
+      for (let i = 0; i < times; i++) {
+        const hitSegment = rollWheelSegment(config.segments, rareMultiplier);
+        const rewardResult = applyWheelReward(hitSegment.id, mvuData.stat_data);
+        drawResults.push({ segment: hitSegment, ...rewardResult });
+        if (rewardResult.pendingFetish) {
+          pendingFetishRewards.push({ resultIndex: i, fetish: rewardResult.pendingFetish });
+        }
+      }
+
+      // 先提交扣费和不依赖用户选择的奖励，避免动画阻塞其他 MVU 操作。
+      await replaceLatestMvuData(mvuData);
+    });
+
+    if (drawResults.length === 0 || drawnSegments.length === 0) return;
+
+    spinWheelToSegment(drawResults[0].segment.id, drawnSegments, isTenDraw);
+    await delay(isTenDraw ? 2600 : 2200);
+
+    const keptFetishes: FetishEntry[] = [];
+    for (const pending of pendingFetishRewards) {
+      const resolved = await resolveFetishReward(pending.fetish);
+      drawResults[pending.resultIndex].text = resolved.text;
+      if (resolved.keptFetish) {
+        keptFetishes.push(resolved.keptFetish);
       }
     }
 
-    spinWheelToSegment(drawResults[0].segment.id, config.segments, isTenDraw);
-    await delay(isTenDraw ? 2600 : 2200);
+    if (keptFetishes.length > 0) {
+      await runLatestMvuTransaction('保存转盘性癖奖励', async () => {
+        const mvuData = await getLatestMvuData();
+        if (!mvuData?.stat_data) return;
 
-    for (const pending of pendingFetishRewards) {
-      const resolvedText = await resolveFetishReward(pending.fetish, mvuData.stat_data);
-      drawResults[pending.resultIndex].text = resolvedText;
+        ensureShopStatData(mvuData.stat_data);
+        for (const fetish of keptFetishes) {
+          addPermanentState(mvuData.stat_data, fetish.name, fetish.bonuses, '商店大转盘获得的永久状态');
+        }
+        await replaceLatestMvuData(mvuData);
+      });
     }
-
-    await replaceLatestMvuData(mvuData);
 
     const previewText = drawResults.map(result => result.text).join('、');
     wheelLastResultText.value = isTenDraw ? `十连结果：${previewText}` : `获得：${drawResults[0].text}`;
@@ -4350,226 +4375,234 @@ function getItemGradeClass(item: any) {
 
 // 购买物品
 async function purchaseItem() {
-  if (!selectedItem.value) return;
+  if (isPurchasing.value || isWheelDrawing.value || !selectedItem.value) return;
+
+  const item = selectedItem.value;
+  isPurchasing.value = true;
 
   try {
-    const mvuData = await getLatestMvuData();
-    if (!mvuData || !mvuData.stat_data) return;
+    await runLatestMvuTransaction('商店购买', async () => {
+      const mvuData = await getLatestMvuData();
+      if (!mvuData || !mvuData.stat_data) return;
 
-    // 确保物品系统存在
-    if (!mvuData.stat_data.物品系统) mvuData.stat_data.物品系统 = {};
-    if (!mvuData.stat_data.物品系统.背包) mvuData.stat_data.物品系统.背包 = {};
+      // 确保物品系统存在
+      if (!mvuData.stat_data.物品系统) mvuData.stat_data.物品系统 = {};
+      if (!mvuData.stat_data.物品系统.背包) mvuData.stat_data.物品系统.背包 = {};
 
-    const item = selectedItem.value;
-    let quantity = purchaseQuantity.value;
+      let quantity = purchaseQuantity.value;
 
-    // 永久提升类购买保护（潜力上限、禁购阈值、批量购买不浪费）
-    if (
-      item.category === 'consumable' &&
-      item.effect?.permanent &&
-      Object.prototype.hasOwnProperty.call(item.effect.permanent, '_潜力')
-    ) {
-      if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
-      const currentPotentialRaw = mvuData.stat_data.核心状态._潜力 ?? 0;
-      const currentPotential = Number(currentPotentialRaw) || 0;
-      const delta = Number(item.effect.permanent._潜力) || 0;
+      // 永久提升类购买保护（潜力上限、禁购阈值、批量购买不浪费）
+      if (
+        item.category === 'consumable' &&
+        item.effect?.permanent &&
+        Object.prototype.hasOwnProperty.call(item.effect.permanent, '_潜力')
+      ) {
+        if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
+        const currentPotentialRaw = mvuData.stat_data.核心状态._潜力 ?? 0;
+        const currentPotential = Number(currentPotentialRaw) || 0;
+        const delta = Number(item.effect.permanent._潜力) || 0;
 
-      if (item.id === 'con_p_6' && currentPotential >= 9.8) {
+        if (item.id === 'con_p_6' && currentPotential >= 9.8) {
+          if (typeof toastr !== 'undefined') {
+            toastr.warning('潜力已接近上限（>=9.8），无法购买高级潜力觉醒药', '购买限制');
+          }
+          return;
+        }
+        if (item.id === 'con_p_5' && currentPotential >= 10) {
+          if (typeof toastr !== 'undefined') {
+            toastr.warning('潜力已达上限（10），无法购买潜力觉醒药', '购买限制');
+          }
+          return;
+        }
+
+        const remaining = Math.max(0, 10 - currentPotential);
+        const maxUsable = delta > 0 ? Math.floor((remaining + 1e-9) / delta) : 0;
+
+        if (maxUsable <= 0) {
+          if (typeof toastr !== 'undefined') {
+            toastr.warning('潜力提升空间不足，本次购买不会产生收益', '购买限制');
+          }
+          return;
+        }
+
+        if (quantity > maxUsable) {
+          quantity = maxUsable;
+          if (typeof toastr !== 'undefined') {
+            toastr.info(`潜力最高为10，已自动将购买数量调整为 ${quantity}`, '数量调整');
+          }
+        }
+      }
+
+      const discountedUnitPrice = getDiscountedPrice(item);
+      const totalPrice = discountedUnitPrice * quantity;
+      const currentGold = Number(mvuData.stat_data.物品系统.学园金币 || 0);
+      if (currentGold < totalPrice) {
         if (typeof toastr !== 'undefined') {
-          toastr.warning('潜力已接近上限（>=9.8），无法购买高级潜力觉醒药', '购买限制');
+          toastr.error('金币不足！', '购买失败');
         }
         return;
       }
-      if (item.id === 'con_p_5' && currentPotential >= 10) {
-        if (typeof toastr !== 'undefined') {
-          toastr.warning('潜力已达上限（10），无法购买潜力觉醒药', '购买限制');
+
+      // 扣除金币（按折扣后价格扣费）
+      mvuData.stat_data.物品系统.学园金币 = currentGold - totalPrice;
+
+      // 根据物品类型处理
+      if (item.category === 'equipment') {
+        addEquipmentToBackpack(mvuData.stat_data, item);
+      } else if (item.category === 'gift') {
+        // 礼物类：添加到背包（使用name作为key）
+        const itemKey = item.name;
+        const existing = mvuData.stat_data.物品系统.背包[itemKey];
+        if (existing) {
+          existing.数量 = (existing.数量 || 0) + quantity;
+        } else {
+          mvuData.stat_data.物品系统.背包[itemKey] = {
+            类型: '其他',
+            等级: 'C',
+            描述: item.description,
+            数量: quantity,
+          };
         }
-        return;
-      }
+      } else if (item.category === 'consumable') {
+        // 消耗品类（使用name作为key）
+        const itemKey = item.id === 'con_s_medal_muxinlan' ? 'honor_medal_muxinlan' : item.name;
+        const existing = mvuData.stat_data.物品系统.背包[itemKey];
 
-      const remaining = Math.max(0, 10 - currentPotential);
-      const maxUsable = delta > 0 ? Math.floor((remaining + 1e-9) / delta) : 0;
+        if (existing) {
+          syncConsumableDefinition(
+            existing,
+            item,
+            item.id === 'con_s_medal_muxinlan' ? '刻有沐芯兰名字的三好学生荣誉勋章' : item.description,
+          );
+          existing.数量 = (existing.数量 || 0) + quantity;
+        } else {
+          const consumableData: any = {
+            类型: '消耗品',
+            等级: 'C',
+            描述: item.id === 'con_s_medal_muxinlan' ? '刻有沐芯兰名字的三好学生荣誉勋章' : item.description,
+            战斗用品: item.combatOnly || false,
+            数量: quantity,
+          };
 
-      if (maxUsable <= 0) {
-        if (typeof toastr !== 'undefined') {
-          toastr.warning('潜力提升空间不足，本次购买不会产生收益', '购买限制');
-        }
-        return;
-      }
+          // 添加效果
+          if (item.effect) {
+            if (item.effect.staminaRestore) consumableData.耐力增加 = item.effect.staminaRestore;
+            if (item.effect.pleasureReduce) consumableData.快感降低 = item.effect.pleasureReduce;
+            if (item.effect.pleasureIncrease) consumableData.快感增加 = item.effect.pleasureIncrease;
+            // 临时buff：存入背包的加成属性，在战斗中使用时才写入临时状态
+            if (item.effect.buff) consumableData.加成属性 = item.effect.buff;
+            if (item.effect.battleEffects) consumableData.战斗效果列表 = item.effect.battleEffects;
 
-      if (quantity > maxUsable) {
-        quantity = maxUsable;
-        if (typeof toastr !== 'undefined') {
-          toastr.info(`潜力最高为10，已自动将购买数量调整为 ${quantity}`, '数量调整');
-        }
-      }
-    }
-
-    const discountedUnitPrice = getDiscountedPrice(item);
-    const totalPrice = discountedUnitPrice * quantity;
-    if (goldCoins.value < totalPrice) {
-      if (typeof toastr !== 'undefined') {
-        toastr.error('金币不足！', '购买失败');
-      }
-      return;
-    }
-
-    // 扣除金币（按折扣后价格扣费）
-    mvuData.stat_data.物品系统.学园金币 = (mvuData.stat_data.物品系统.学园金币 || 0) - totalPrice;
-
-    // 根据物品类型处理
-    if (item.category === 'equipment') {
-      addEquipmentToBackpack(mvuData.stat_data, item);
-    } else if (item.category === 'gift') {
-      // 礼物类：添加到背包（使用name作为key）
-      const itemKey = item.name;
-      const existing = mvuData.stat_data.物品系统.背包[itemKey];
-      if (existing) {
-        existing.数量 = (existing.数量 || 0) + quantity;
-      } else {
-        mvuData.stat_data.物品系统.背包[itemKey] = {
-          类型: '其他',
-          等级: 'C',
-          描述: item.description,
-          数量: quantity,
-        };
-      }
-    } else if (item.category === 'consumable') {
-      // 消耗品类（使用name作为key）
-      const itemKey = item.id === 'con_s_medal_muxinlan' ? 'honor_medal_muxinlan' : item.name;
-      const existing = mvuData.stat_data.物品系统.背包[itemKey];
-
-      if (existing) {
-        syncConsumableDefinition(
-          existing,
-          item,
-          item.id === 'con_s_medal_muxinlan' ? '刻有沐芯兰名字的三好学生荣誉勋章' : item.description,
-        );
-        existing.数量 = (existing.数量 || 0) + quantity;
-      } else {
-        const consumableData: any = {
-          类型: '消耗品',
-          等级: 'C',
-          描述: item.id === 'con_s_medal_muxinlan' ? '刻有沐芯兰名字的三好学生荣誉勋章' : item.description,
-          战斗用品: item.combatOnly || false,
-          数量: quantity,
-        };
-
-        // 添加效果
-        if (item.effect) {
-          if (item.effect.staminaRestore) consumableData.耐力增加 = item.effect.staminaRestore;
-          if (item.effect.pleasureReduce) consumableData.快感降低 = item.effect.pleasureReduce;
-          if (item.effect.pleasureIncrease) consumableData.快感增加 = item.effect.pleasureIncrease;
-          // 临时buff：存入背包的加成属性，在战斗中使用时才写入临时状态
-          if (item.effect.buff) consumableData.加成属性 = item.effect.buff;
-          if (item.effect.battleEffects) consumableData.战斗效果列表 = item.effect.battleEffects;
-
-          // 幸运红包特殊处理：随机属性+1 或 随机金币
-          if (item.effect.luckyEnvelope) {
-            if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
-            if (!mvuData.stat_data.基础属性) mvuData.stat_data.基础属性 = {};
-            ensurePermanentStatusContainer(mvuData.stat_data);
-            const results: string[] = [];
-            for (let i = 0; i < quantity; i++) {
-              const roll = Math.random();
-              if (roll < 0.5) {
-                // 50% 概率：随机属性+1
-                const statPool = [
-                  { key: '基础性斗力成算', label: '性斗力成算', target: 'bonus' },
-                  { key: '基础忍耐力成算', label: '忍耐力成算', target: 'bonus' },
-                  { key: '_魅力', label: '基础魅力', target: 'base' },
-                  { key: '_幸运', label: '基础幸运', target: 'base' },
-                ];
-                const chosen = statPool[Math.floor(Math.random() * statPool.length)];
-                if (chosen.target === 'bonus') {
-                  addPermanentBonus(mvuData.stat_data, chosen.key, 1);
+            // 幸运红包特殊处理：随机属性+1 或 随机金币
+            if (item.effect.luckyEnvelope) {
+              if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
+              if (!mvuData.stat_data.基础属性) mvuData.stat_data.基础属性 = {};
+              ensurePermanentStatusContainer(mvuData.stat_data);
+              const results: string[] = [];
+              for (let i = 0; i < quantity; i++) {
+                const roll = Math.random();
+                if (roll < 0.5) {
+                  // 50% 概率：随机属性+1
+                  const statPool = [
+                    { key: '基础性斗力成算', label: '性斗力成算', target: 'bonus' },
+                    { key: '基础忍耐力成算', label: '忍耐力成算', target: 'bonus' },
+                    { key: '_魅力', label: '基础魅力', target: 'base' },
+                    { key: '_幸运', label: '基础幸运', target: 'base' },
+                  ];
+                  const chosen = statPool[Math.floor(Math.random() * statPool.length)];
+                  if (chosen.target === 'bonus') {
+                    addPermanentBonus(mvuData.stat_data, chosen.key, 1);
+                  } else {
+                    mvuData.stat_data.基础属性[chosen.key] = (mvuData.stat_data.基础属性[chosen.key] || 0) + 1;
+                  }
+                  results.push(`${chosen.label}+1`);
                 } else {
-                  mvuData.stat_data.基础属性[chosen.key] = (mvuData.stat_data.基础属性[chosen.key] || 0) + 1;
+                  // 50% 概率：随机金币 100~1000
+                  const goldReward = Math.floor(Math.random() * 901) + 100;
+                  mvuData.stat_data.物品系统.学园金币 = (mvuData.stat_data.物品系统.学园金币 || 0) + goldReward;
+                  results.push(`金币+${goldReward}`);
                 }
-                results.push(`${chosen.label}+1`);
-              } else {
-                // 50% 概率：随机金币 100~1000
-                const goldReward = Math.floor(Math.random() * 901) + 100;
-                mvuData.stat_data.物品系统.学园金币 = (mvuData.stat_data.物品系统.学园金币 || 0) + goldReward;
-                results.push(`金币+${goldReward}`);
               }
-            }
-            await replaceLatestMvuData(mvuData);
-            if (typeof toastr !== 'undefined') {
-              toastr.success(`红包开启：${results.join(', ')}`, '🧧 恭喜发财');
-            }
-            selectedItem.value = null;
-            return;
-          }
-
-          if (item.effect.permanent) {
-            // 永久提升类：直接应用到持久事实字段
-            if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
-            if (!mvuData.stat_data.基础属性) mvuData.stat_data.基础属性 = {};
-            const baseAttributeKeyMap: Record<string, string> = {
-              魅力: '_魅力',
-              幸运: '_幸运',
-              闪避率: '_闪避率',
-              暴击率: '_暴击率',
-            };
-            for (const [key, value] of Object.entries(item.effect.permanent)) {
-              if (key === '_潜力') {
-                const currentPotentialRaw = mvuData.stat_data.核心状态._潜力 ?? 0;
-                const currentPotential = Number(currentPotentialRaw) || 0;
-                const nextPotential = Math.min(10, currentPotential + (Number(value) || 0) * quantity);
-                mvuData.stat_data.核心状态._潜力 = nextPotential;
-              } else if (baseAttributeKeyMap[key]) {
-                const baseKey = baseAttributeKeyMap[key];
-                mvuData.stat_data.基础属性[baseKey] =
-                  (mvuData.stat_data.基础属性[baseKey] || 0) + (value as number) * quantity;
-              } else {
-                mvuData.stat_data.核心状态[key] = (mvuData.stat_data.核心状态[key] || 0) + (value as number) * quantity;
+              await replaceLatestMvuData(mvuData);
+              if (typeof toastr !== 'undefined') {
+                toastr.success(`红包开启：${results.join(', ')}`, '🧧 恭喜发财');
               }
+              selectedItem.value = null;
+              return;
             }
-            // 永久提升不存入背包，直接生效
-            await replaceLatestMvuData(mvuData);
 
-            if (typeof toastr !== 'undefined') {
-              toastr.success(`永久属性提升成功！`, '购买成功');
+            if (item.effect.permanent) {
+              // 永久提升类：直接应用到持久事实字段
+              if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
+              if (!mvuData.stat_data.基础属性) mvuData.stat_data.基础属性 = {};
+              const baseAttributeKeyMap: Record<string, string> = {
+                魅力: '_魅力',
+                幸运: '_幸运',
+                闪避率: '_闪避率',
+                暴击率: '_暴击率',
+              };
+              for (const [key, value] of Object.entries(item.effect.permanent)) {
+                if (key === '_潜力') {
+                  const currentPotentialRaw = mvuData.stat_data.核心状态._潜力 ?? 0;
+                  const currentPotential = Number(currentPotentialRaw) || 0;
+                  const nextPotential = Math.min(10, currentPotential + (Number(value) || 0) * quantity);
+                  mvuData.stat_data.核心状态._潜力 = nextPotential;
+                } else if (baseAttributeKeyMap[key]) {
+                  const baseKey = baseAttributeKeyMap[key];
+                  mvuData.stat_data.基础属性[baseKey] =
+                    (mvuData.stat_data.基础属性[baseKey] || 0) + (value as number) * quantity;
+                } else {
+                  mvuData.stat_data.核心状态[key] =
+                    (mvuData.stat_data.核心状态[key] || 0) + (value as number) * quantity;
+                }
+              }
+              // 永久提升不存入背包，直接生效
+              await replaceLatestMvuData(mvuData);
+
+              if (typeof toastr !== 'undefined') {
+                toastr.success(`永久属性提升成功！`, '购买成功');
+              }
+              selectedItem.value = null;
+              return;
             }
-            selectedItem.value = null;
-            return;
+
+            if (item.effect.permanentBonus) {
+              // 永久成算类提升：写入永久状态条目，由 selector 实时汇总。
+              ensurePermanentStatusContainer(mvuData.stat_data);
+              for (const [key, value] of Object.entries(item.effect.permanentBonus)) {
+                addPermanentBonus(mvuData.stat_data, key, (value as number) * quantity);
+              }
+              // 永久提升不存入背包，直接生效
+              await replaceLatestMvuData(mvuData);
+
+              if (typeof toastr !== 'undefined') {
+                toastr.success(`永久属性提升成功！`, '购买成功');
+              }
+              selectedItem.value = null;
+              return;
+            }
           }
 
-          if (item.effect.permanentBonus) {
-            // 永久成算类提升：写入永久状态条目，由 selector 实时汇总。
-            ensurePermanentStatusContainer(mvuData.stat_data);
-            for (const [key, value] of Object.entries(item.effect.permanentBonus)) {
-              addPermanentBonus(mvuData.stat_data, key, (value as number) * quantity);
-            }
-            // 永久提升不存入背包，直接生效
-            await replaceLatestMvuData(mvuData);
-
-            if (typeof toastr !== 'undefined') {
-              toastr.success(`永久属性提升成功！`, '购买成功');
-            }
-            selectedItem.value = null;
-            return;
-          }
+          mvuData.stat_data.物品系统.背包[itemKey] = consumableData;
         }
-
-        mvuData.stat_data.物品系统.背包[itemKey] = consumableData;
       }
-    }
 
-    // 写回MVU
-    await replaceLatestMvuData(mvuData);
+      // 写回MVU
+      await replaceLatestMvuData(mvuData);
 
-    if (typeof toastr !== 'undefined') {
-      toastr.success(`成功购买 ${item.name} x${quantity}`, '购买成功');
-    }
+      if (typeof toastr !== 'undefined') {
+        toastr.success(`成功购买 ${item.name} x${quantity}`, '购买成功');
+      }
 
-    selectedItem.value = null;
+      selectedItem.value = null;
+    });
   } catch (error) {
     console.error('[商店] 购买失败:', error);
     if (typeof toastr !== 'undefined') {
       toastr.error('购买失败，请重试', '错误');
     }
+  } finally {
+    isPurchasing.value = false;
   }
 }
 
