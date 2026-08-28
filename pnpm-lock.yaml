@@ -6124,8 +6124,11 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
       picomatch: 4.0.7
+<<<<<<< HEAD
 
   fflate@0.8.3: {}
+=======
+>>>>>>> fd8153baf11ced5360854b92fb17395299e83151
 
   file-entry-cache@8.0.0:
     dependencies:
