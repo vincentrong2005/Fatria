@@ -11,7 +11,7 @@
  */
 
 import { get, isEqual, set } from '@/util/common';
-import { createScriptIdDiv } from '@/util/script';
+import { createScriptIdDiv, teleportStyle } from '@/util/script';
 import {
   migrateLegacyCGUnlocksToCharacterVariables,
   unlockMaxFavorCharacterCGsFromMvuData,
@@ -673,6 +673,7 @@ let isNormalizingBackpackEquipments = false;
 // 状态栏相关
 let statusBarApp: any = null;
 let statusBarContainer: JQuery<HTMLDivElement> | null = null;
+let destroyStatusBarStyles: (() => void) | null = null;
 let statusBarVisible = false;
 
 async function normalizeLatestCharacterNames(reason: string) {
@@ -1006,7 +1007,6 @@ async function updateDependentVariables() {
         console.info(
           `[性斗学园脚本] 满级经验转金币：${finalExp}经验 → ${goldEarned}金币 (总金币: ${currentGold + goldEarned})`,
         );
-        finalExp = 0;
       }
 
       const expectedRank = calculateRank(finalLevel);
@@ -1379,13 +1379,34 @@ function initStatusBar() {
     // 确保添加到 body 的最上层
     $('body').append(statusBarContainer);
 
+    // 小手机是独立浮层，样式必须与酒馆及其他脚本隔离。
+    const shadowRoot = statusBarContainer[0].attachShadow({ mode: 'open' });
+    const stylesheetLinks = Array.from(document.head.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')).map(
+      link => {
+        const clonedLink = link.cloneNode(true) as HTMLLinkElement;
+        shadowRoot.append(clonedLink);
+        return clonedLink;
+      },
+    );
+    const { destroy } = teleportStyle(shadowRoot);
+    destroyStatusBarStyles = () => {
+      destroy();
+      stylesheetLinks.forEach(link => link.remove());
+    };
+
+    const appMountPoint = shadowRoot.ownerDocument.createElement('div');
+    shadowRoot.append(appMountPoint);
     const app = createApp(StatusBarWrapper);
 
     statusBarApp = app;
-    app.mount(statusBarContainer[0]);
+    app.mount(appMountPoint);
 
     console.info('[性斗学园脚本] 状态栏已初始化');
   } catch (error) {
+    destroyStatusBarStyles?.();
+    destroyStatusBarStyles = null;
+    statusBarContainer?.remove();
+    statusBarContainer = null;
     console.error('[性斗学园脚本] 初始化状态栏失败:', error);
   }
 }
@@ -1464,6 +1485,8 @@ if (isPrimaryScriptInstance) {
       statusBarApp.unmount();
       statusBarApp = null;
     }
+    destroyStatusBarStyles?.();
+    destroyStatusBarStyles = null;
     if (statusBarContainer) {
       statusBarContainer.remove();
       statusBarContainer = null;

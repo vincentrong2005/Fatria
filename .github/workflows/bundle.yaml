@@ -52,12 +52,27 @@ jobs:
           default_author: github_actions
           message: '[bot] bundle'
 
-      # 自动打版本 tag, 从而让 jsdelivr 基于版本号在 12h 内更新缓存而不是用非版本号的 7d 缓存
-      - id: autotag
+      - name: Create immutable script release tag
         if: github.repository != 'StageDog/tavern_helper_template'
-        uses: phish108/autotag-action@v1.1.64
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          with-v: true
-      - if: ${{ github.repository != 'StageDog/tavern_helper_template' && steps.autotag.outputs.tag != '0.0.0' && steps.autotag.outputs.new-tag != steps.autotag.outputs.tag }}
-        run: git push --delete origin ${{ steps.autotag.outputs.tag }}
+        env:
+          MANIFEST_PATH: src/性斗学园/性斗学园脚本/update-manifest.json
+          UPDATER_PATH: src/性斗学园/性斗学园脚本/scriptUpdater.ts
+        run: |
+          version="$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).version" "$MANIFEST_PATH")"
+          release_tag="$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).releaseTag" "$MANIFEST_PATH")"
+          script_version="$(sed -n "s/^export const SCRIPT_VERSION = '\([^']*\)';$/\1/p" "$UPDATER_PATH")"
+
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ "$release_tag" != "v$version" ]] || [[ "$script_version" != "$version" ]]; then
+            echo "性斗学园脚本版本、更新清单和发布标签必须完全一致。"
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$release_tag" >/dev/null; then
+            echo "发布标签 $release_tag 已存在，跳过创建。"
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "$release_tag" -m "性斗学园脚本 $release_tag"
+          git push origin "refs/tags/$release_tag"
