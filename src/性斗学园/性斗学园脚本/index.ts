@@ -11,7 +11,7 @@
  */
 
 import { get, isEqual, set } from '@/util/common';
-import { createScriptIdDiv, teleportStyle } from '@/util/script';
+import { createScriptIdDiv } from '@/util/script';
 import {
   migrateLegacyCGUnlocksToCharacterVariables,
   unlockMaxFavorCharacterCGsFromMvuData,
@@ -1388,10 +1388,16 @@ function initStatusBar() {
         return clonedLink;
       },
     );
-    const { destroy } = teleportStyle(shadowRoot);
+    // 脚本运行在 iframe 中，直接复制它自己的打包样式到 Shadow Root。
+    // 不使用 teleportStyle：src/util 中的旧版接口没有返回清理函数，也不支持 Shadow Root 目标。
+    const stylesheetNodes = Array.from(document.head.querySelectorAll<HTMLStyleElement>('style')).map(style => {
+      const clonedStyle = style.cloneNode(true) as HTMLStyleElement;
+      shadowRoot.append(clonedStyle);
+      return clonedStyle;
+    });
     destroyStatusBarStyles = () => {
-      destroy();
       stylesheetLinks.forEach(link => link.remove());
+      stylesheetNodes.forEach(style => style.remove());
     };
 
     const appMountPoint = shadowRoot.ownerDocument.createElement('div');
