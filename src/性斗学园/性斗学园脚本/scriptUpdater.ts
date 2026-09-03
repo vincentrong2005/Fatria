@@ -1,6 +1,6 @@
 import { compare } from 'compare-versions';
 
-export const SCRIPT_VERSION = '3.6.12';
+export const SCRIPT_VERSION = '3.6.13';
 export const SCRIPT_UPDATE_EVENT = 'fatria-script-update-status';
 
 const JSDELIVR_HOST = 'cdn.jsdelivr.net';

@@ -1381,13 +1381,21 @@ function initStatusBar() {
 
     // 小手机是独立浮层，样式必须与酒馆及其他脚本隔离。
     const shadowRoot = statusBarContainer[0].attachShadow({ mode: 'open' });
-    const stylesheetLinks = Array.from(document.head.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')).map(
-      link => {
-        const clonedLink = link.cloneNode(true) as HTMLLinkElement;
-        shadowRoot.append(clonedLink);
-        return clonedLink;
-      },
-    );
+    const iframeStylesheetLinks = Array.from(document.head.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'));
+    // Font Awesome 由酒馆主页面本地提供；Shadow Root 不会继承它的图标规则。
+    const hostFontAwesomeLinks = Array.from(
+      window.parent.document.head.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'),
+    ).filter(link => /fontawesome|fortawesome/i.test(link.href));
+    const copiedStylesheetHrefs = new Set<string>();
+    const stylesheetLinks = [...iframeStylesheetLinks, ...hostFontAwesomeLinks].flatMap(link => {
+      if (!link.href || copiedStylesheetHrefs.has(link.href)) {
+        return [];
+      }
+      copiedStylesheetHrefs.add(link.href);
+      const clonedLink = link.cloneNode(true) as HTMLLinkElement;
+      shadowRoot.append(clonedLink);
+      return [clonedLink];
+    });
     // 脚本运行在 iframe 中，直接复制它自己的打包样式到 Shadow Root。
     // 不使用 teleportStyle：src/util 中的旧版接口没有返回清理函数，也不支持 Shadow Root 目标。
     const stylesheetNodes = Array.from(document.head.querySelectorAll<HTMLStyleElement>('style')).map(style => {
