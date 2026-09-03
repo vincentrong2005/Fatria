@@ -46,15 +46,15 @@
                 </button>
               </div>
 
-              <div class="app-grid">
+              <div class="fatria-phone-app-grid">
                 <button
                   v-for="app in homeApps"
                   :key="app.page"
-                  class="phone-app"
+                  class="fatria-phone-app"
                   type="button"
                   @click="setPage(app.page)"
                 >
-                  <span class="app-icon" :class="app.colorClass">
+                  <span class="fatria-phone-app-icon" :class="app.colorClass">
                     <i :class="app.icon"></i>
                     <span
                       v-if="app.page === 'settings' && hasScriptUpdate"
@@ -62,19 +62,19 @@
                       aria-hidden="true"
                     ></span>
                   </span>
-                  <span class="app-label">{{ app.label }}</span>
+                  <span class="fatria-phone-app-label">{{ app.label }}</span>
                 </button>
               </div>
 
-              <div class="dock">
+              <div class="fatria-phone-dock">
                 <button
                   v-for="app in dockApps"
                   :key="app.page"
-                  class="dock-app"
+                  class="fatria-phone-dock-app"
                   type="button"
                   @click="setPage(app.page)"
                 >
-                  <span class="app-icon" :class="app.colorClass">
+                  <span class="fatria-phone-app-icon" :class="app.colorClass">
                     <i :class="app.icon"></i>
                     <span
                       v-if="app.page === 'settings' && hasScriptUpdate"
@@ -82,7 +82,7 @@
                       aria-hidden="true"
                     ></span>
                   </span>
-                  <span class="app-label">{{ app.label }}</span>
+                  <span class="fatria-phone-app-label">{{ app.label }}</span>
                 </button>
               </div>
             </section>
@@ -1185,17 +1185,17 @@ const DEFAULT_PHONE_PREFS: PhonePreferences = {
 };
 
 const phoneApps: PhoneApp[] = [
-  { page: 'dashboard', label: '状态', icon: 'fas fa-home', colorClass: 'app-cyan' },
-  { page: 'profile', label: '档案', icon: 'fas fa-id-card', colorClass: 'app-blue', dock: true },
-  { page: 'skills', label: '技能', icon: 'fas fa-magic', colorClass: 'app-violet', dock: true },
-  { page: 'inventory', label: '背包', icon: 'fas fa-briefcase', colorClass: 'app-amber', dock: true },
-  { page: 'quest', label: '任务', icon: 'fas fa-tasks', colorClass: 'app-green' },
-  { page: 'relationship', label: '关系', icon: 'fas fa-heart', colorClass: 'app-pink' },
-  { page: 'backstreet', label: '后街', icon: 'fas fa-comments', colorClass: 'app-backstreet' },
-  { page: 'map', label: '地图', icon: 'fas fa-map-marker-alt', colorClass: 'app-teal' },
-  { page: 'shop', label: '商店', icon: 'fas fa-store', colorClass: 'app-orange' },
-  { page: 'cg', label: '相册', icon: 'fas fa-images', colorClass: 'app-rose' },
-  { page: 'settings', label: '设置', icon: 'fas fa-cog', colorClass: 'app-slate', dock: true },
+  { page: 'dashboard', label: '状态', icon: 'fas fa-home', colorClass: 'fatria-phone-app-cyan' },
+  { page: 'profile', label: '档案', icon: 'fas fa-id-card', colorClass: 'fatria-phone-app-blue', dock: true },
+  { page: 'skills', label: '技能', icon: 'fas fa-magic', colorClass: 'fatria-phone-app-violet', dock: true },
+  { page: 'inventory', label: '背包', icon: 'fas fa-briefcase', colorClass: 'fatria-phone-app-amber', dock: true },
+  { page: 'quest', label: '任务', icon: 'fas fa-tasks', colorClass: 'fatria-phone-app-green' },
+  { page: 'relationship', label: '关系', icon: 'fas fa-heart', colorClass: 'fatria-phone-app-pink' },
+  { page: 'backstreet', label: '后街', icon: 'fas fa-comments', colorClass: 'fatria-phone-app-backstreet' },
+  { page: 'map', label: '地图', icon: 'fas fa-map-marker-alt', colorClass: 'fatria-phone-app-teal' },
+  { page: 'shop', label: '商店', icon: 'fas fa-store', colorClass: 'fatria-phone-app-orange' },
+  { page: 'cg', label: '相册', icon: 'fas fa-images', colorClass: 'fatria-phone-app-rose' },
+  { page: 'settings', label: '设置', icon: 'fas fa-cog', colorClass: 'fatria-phone-app-slate', dock: true },
 ];
 
 const currentPage = ref<PageKey>('home');
@@ -2390,7 +2390,7 @@ onUnmounted(() => {
   color: rgba(255, 255, 255, 0.78);
 }
 
-.app-grid {
+.fatria-phone-app-grid {
   display: grid;
   grid-template-columns: repeat(3, 76px);
   row-gap: 26px;
@@ -2400,8 +2400,8 @@ onUnmounted(() => {
   align-content: start;
 }
 
-.phone-app,
-.dock-app {
+.fatria-phone-app,
+.fatria-phone-dock-app {
   width: 76px;
   min-width: 0;
   min-height: 88px;
@@ -2430,7 +2430,7 @@ onUnmounted(() => {
   }
 }
 
-.app-icon {
+.fatria-phone-app-icon {
   position: relative;
   width: 58px;
   height: 58px;
@@ -2498,7 +2498,7 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
-.app-label {
+.fatria-phone-app-label {
   width: 76px;
   min-height: 17px;
   overflow: hidden;
@@ -2510,51 +2510,51 @@ onUnmounted(() => {
   letter-spacing: 0;
 }
 
-.app-cyan {
+.fatria-phone-app-cyan {
   background: linear-gradient(145deg, #31b8c9, #287c8e);
 }
 
-.app-blue {
+.fatria-phone-app-blue {
   background: linear-gradient(145deg, #4f8fd7, #315d9d);
 }
 
-.app-violet {
+.fatria-phone-app-violet {
   background: linear-gradient(145deg, #8b6de8, #5b45ad);
 }
 
-.app-amber {
+.fatria-phone-app-amber {
   background: linear-gradient(145deg, #d99535, #a35f1e);
 }
 
-.app-green {
+.fatria-phone-app-green {
   background: linear-gradient(145deg, #4fac78, #2f7651);
 }
 
-.app-pink {
+.fatria-phone-app-pink {
   background: linear-gradient(145deg, #e6679a, #ad3d6c);
 }
 
-.app-teal {
+.fatria-phone-app-teal {
   background: linear-gradient(145deg, #48a99f, #2f716c);
 }
 
-.app-orange {
+.fatria-phone-app-orange {
   background: linear-gradient(145deg, #e17a42, #a84c28);
 }
 
-.app-rose {
+.fatria-phone-app-rose {
   background: linear-gradient(145deg, #c35f7d, #8b3a58);
 }
 
-.app-backstreet {
+.fatria-phone-app-backstreet {
   background: linear-gradient(145deg, #35a687, #2c6778);
 }
 
-.app-slate {
+.fatria-phone-app-slate {
   background: linear-gradient(145deg, #91a3ad, #566a74);
 }
 
-.icon-style-glass-tile .app-icon {
+.icon-style-glass-tile .fatria-phone-app-icon {
   border-radius: 18px;
   box-shadow:
     0 12px 22px rgba(28, 64, 74, 0.28),
@@ -2568,7 +2568,7 @@ onUnmounted(() => {
   }
 }
 
-.icon-style-academy-badge .app-icon {
+.icon-style-academy-badge .fatria-phone-app-icon {
   border-width: 2px;
   border-color: rgba(255, 255, 255, 0.42);
   border-radius: 999px;
@@ -2591,7 +2591,7 @@ onUnmounted(() => {
   }
 }
 
-.icon-style-prism-card .app-icon {
+.icon-style-prism-card .fatria-phone-app-icon {
   border-color: rgba(255, 255, 255, 0.24);
   border-radius: 9px 20px 9px 20px;
   transform: rotate(-5deg);
@@ -2617,7 +2617,7 @@ onUnmounted(() => {
   }
 }
 
-.icon-style-corner-chip .app-icon {
+.icon-style-corner-chip .fatria-phone-app-icon {
   border-color: rgba(255, 255, 255, 0.3);
   border-radius: 13px;
   clip-path: polygon(14% 0, 100% 0, 100% 76%, 76% 100%, 0 100%, 0 14%);
@@ -2639,7 +2639,7 @@ onUnmounted(() => {
   }
 }
 
-.icon-style-paper-sticker .app-icon {
+.icon-style-paper-sticker .fatria-phone-app-icon {
   border: 3px solid rgba(255, 255, 255, 0.88);
   border-radius: 18px 25px 16px 24px;
   transform: rotate(4deg);
@@ -2669,7 +2669,7 @@ onUnmounted(() => {
   }
 }
 
-.dock {
+.fatria-phone-dock {
   margin-top: auto;
   min-height: 94px;
   padding: 12px 10px 10px;
@@ -2686,11 +2686,11 @@ onUnmounted(() => {
   backdrop-filter: blur(14px);
 }
 
-.dock-app {
+.fatria-phone-dock-app {
   width: 64px;
   gap: 5px;
 
-  .app-icon {
+  .fatria-phone-app-icon {
     width: 50px;
     height: 50px;
     min-width: 50px;
@@ -2705,7 +2705,7 @@ onUnmounted(() => {
     }
   }
 
-  .app-label {
+  .fatria-phone-app-label {
     width: 64px;
     font-size: 11px;
   }
@@ -3668,18 +3668,18 @@ onUnmounted(() => {
     font-size: 18px;
   }
 
-  .app-grid {
+  .fatria-phone-app-grid {
     grid-template-columns: repeat(3, 68px);
     column-gap: 10px;
     row-gap: 20px;
   }
 
-  .phone-app {
+  .fatria-phone-app {
     width: 68px;
     min-height: 82px;
   }
 
-  .app-icon {
+  .fatria-phone-app-icon {
     width: 52px;
     height: 52px;
     min-width: 52px;
@@ -3689,7 +3689,7 @@ onUnmounted(() => {
     flex-basis: 52px;
   }
 
-  .app-label {
+  .fatria-phone-app-label {
     width: 68px;
     font-size: 12px;
   }
@@ -3704,11 +3704,11 @@ onUnmounted(() => {
     height: 68px;
   }
 
-  .app-grid {
+  .fatria-phone-app-grid {
     row-gap: 16px;
   }
 
-  .app-icon {
+  .fatria-phone-app-icon {
     width: 50px;
     height: 50px;
     min-width: 50px;

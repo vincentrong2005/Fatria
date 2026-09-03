@@ -11,7 +11,7 @@
  */
 
 import { get, isEqual, set } from '@/util/common';
-import { createScriptIdDiv, deteleportStyle, teleportStyle } from '@/util/script';
+import { createScriptIdDiv } from '@/util/script';
 import {
   migrateLegacyCGUnlocksToCharacterVariables,
   unlockMaxFavorCharacterCGsFromMvuData,
@@ -1381,7 +1381,6 @@ function initStatusBar() {
 
     const app = createApp(StatusBarWrapper);
 
-    teleportStyle();
     statusBarApp = app;
     app.mount(statusBarContainer[0]);
 
@@ -1469,7 +1468,6 @@ if (isPrimaryScriptInstance) {
       statusBarContainer.remove();
       statusBarContainer = null;
     }
-    deteleportStyle();
     clearUserInfoSyncTimers();
     if (periodicUpdateTimer) {
       clearInterval(periodicUpdateTimer);
