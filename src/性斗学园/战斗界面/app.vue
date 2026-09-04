@@ -1,5 +1,11 @@
 <template>
   <div class="combat-wrapper">
+    <div
+      aria-hidden="true"
+      class="combat-test-corner combat-test-corner-right"
+      @click.prevent.stop="handleCombatTestAdvance"
+    ></div>
+
     <!-- 背景效果 -->
     <BackgroundAmbience />
 
@@ -661,6 +667,7 @@ import {
   type BossPhaseRuntimeConfig,
   type BossPhaseSideEffectAction,
 } from './combatBossTransitions';
+import { getCurrentBossPhase, type CurrentBossId } from './bossDefinitions';
 import { createBossRuntimeSetup, getPlayerGenderFromData, type BossSetupAction } from './combatBossSetup';
 import {
   createClimaxLimitStatusLogs,
@@ -697,6 +704,7 @@ import {
   getExorcismPleasurePercent,
   getExorcismSkillTags,
 } from './combatExorcismMechanics';
+import { getExorcismBossDefinitionMatch } from './exorcismBossDefinitions';
 import { buildCombatNarrationPrompt } from './combatLog';
 import {
   buildSpecialNegativeItemSummary,
@@ -2497,6 +2505,156 @@ function isBattleFinished(): boolean {
 
 function isBattleFlowLocked(): boolean {
   return isBattleFinished() || turnState.climaxTarget !== null;
+}
+
+let combatTestActionPending = false;
+
+function handleCombatTestAdvance(): void {
+  if (combatTestActionPending || isBattleFlowLocked()) {
+    return;
+  }
+
+  combatTestActionPending = true;
+  void advanceCurrentEnemyTestPhase().finally(() => {
+    combatTestActionPending = false;
+  });
+}
+
+function getLegacyBossTestPhaseConfig(bossId: CurrentBossId, phase: number): BossPhaseRuntimeConfig | null {
+  const definition = getCurrentBossPhase(bossId, phase);
+  if (!definition) {
+    return null;
+  }
+
+  return {
+    displayName: definition.displayName,
+    dataKey: definition.dataKey,
+    skillPoolKey: definition.skillPoolKey,
+    avatarUrl: definition.avatarUrl ?? getEnemyPortraitUrl(definition.dataKey),
+    climaxLimit: (definition.climaxLimit ?? player.value.stats.maxClimaxCount) || 1,
+    transitionEffect: phase >= 3 ? 'phase2to3' : 'phase1to2',
+  };
+}
+
+async function finishCombatWithTestVictory(): Promise<void> {
+  if (isBattleFinished()) {
+    return;
+  }
+
+  turnState.phase = 'victory';
+  turnState.enemyIntention = null;
+  triggerEffect('victory');
+  await finishCombatAfterResult();
+}
+
+function getTestExorcismDefinitionMatch() {
+  const candidateNames = [enemy.value.name, _.get(currentCombatStatData, '性斗系统.对手名称', '')];
+  for (const name of candidateNames) {
+    const match = getExorcismBossDefinitionMatch(String(name || '').trim());
+    if (match) {
+      return match;
+    }
+  }
+  return undefined;
+}
+
+async function advanceInactiveExorcismTestPhase(): Promise<boolean> {
+  const match = getTestExorcismDefinitionMatch();
+  if (!match) {
+    return false;
+  }
+
+  const currentPhase = match.phase?.phase ?? 1;
+  const nextPhase = match.definition.phases.find(phase => phase.phase > currentPhase);
+  if (!nextPhase) {
+    await finishCombatWithTestVictory();
+    return true;
+  }
+
+  const phaseConfig = createExorcismPhaseRuntimeConfig({
+    definition: match.definition,
+    phase: nextPhase.phase,
+    defaultClimaxLimit: player.value.stats.maxClimaxCount || enemy.value.stats.maxClimaxCount || 1,
+    getEnemyPortraitUrl,
+  });
+  if (!phaseConfig) {
+    console.error(`[战斗界面] 测试阶段切换未找到 ${match.definition.displayName} 的第 ${nextPhase.phase} 阶段配置。`);
+    return true;
+  }
+
+  isPhaseTransitioning.value = true;
+  phaseTransitionEffect.value = phaseConfig.transitionEffect;
+  try {
+    const nextEnemyData = await loadAndApplyBossPhaseRuntime(phaseConfig, {
+      updateAvatar: true,
+      skillLogLabel: '[战斗界面] 测试驱魔阶段技能池:',
+    });
+    if (nextEnemyData) {
+      setSharedClimaxLimit(phaseConfig.climaxLimit);
+      addLog(`【测试阶段】${phaseConfig.displayName} 已载入。`, 'system', 'critical');
+    }
+  } catch (error) {
+    console.error('[战斗界面] 测试驱魔阶段加载失败', error);
+  } finally {
+    isPhaseTransitioning.value = false;
+    setTimeout(() => {
+      phaseTransitionEffect.value = null;
+    }, 1200);
+  }
+
+  return true;
+}
+
+async function advanceCurrentEnemyTestPhase(): Promise<void> {
+  const exorcismDefinition = exorcismBossDefinition.value;
+  const exorcismRuntime = exorcismBossRuntime.value;
+  if (exorcismDefinition && exorcismRuntime) {
+    const nextPhase = exorcismDefinition.phases.find(phase => phase.phase > exorcismRuntime.currentPhase);
+    if (!nextPhase) {
+      await finishCombatWithTestVictory();
+      return;
+    }
+
+    exorcismRuntime.currentPhase = nextPhase.phase;
+    exorcismRuntime.skillPoolKey = nextPhase.skillPoolKey;
+    const phaseConfig = await applyExorcismPhaseRuntime(nextPhase.phase);
+    if (phaseConfig) {
+      await evaluateAndApplyExorcismMechanics('phaseEnter');
+    }
+    return;
+  }
+
+  if (await advanceInactiveExorcismTestPhase()) {
+    return;
+  }
+
+  if (BossSystem.bossState.isBossFight && BossSystem.bossState.bossId) {
+    const nextPhase = BossSystem.bossState.currentPhase + 1;
+    const phaseConfig = getLegacyBossTestPhaseConfig(BossSystem.bossState.bossId, nextPhase);
+    if (phaseConfig) {
+      BossSystem.executePhaseTransition(nextPhase as 1 | 2 | 3);
+      isPhaseTransitioning.value = true;
+      phaseTransitionEffect.value = phaseConfig.transitionEffect;
+      try {
+        const nextEnemyData = await loadAndApplyBossPhaseRuntime(phaseConfig, {
+          updateAvatar: true,
+          skillLogLabel: '[战斗界面] 测试阶段技能池:',
+        });
+        if (nextEnemyData) {
+          setSharedClimaxLimit(phaseConfig.climaxLimit);
+        }
+      } finally {
+        BossSystem.completePhaseTransition();
+        isPhaseTransitioning.value = false;
+        setTimeout(() => {
+          phaseTransitionEffect.value = null;
+        }, 1200);
+      }
+      return;
+    }
+  }
+
+  await finishCombatWithTestVictory();
 }
 
 // ================= 辅助函数 =================
@@ -7726,6 +7884,19 @@ function getSinTalentDisplayName(sinType: string): string {
   font-family: 'Noto Sans SC', system-ui, sans-serif;
   color: #e2e8f0;
   overflow-x: hidden;
+}
+
+.combat-test-corner {
+  position: absolute;
+  top: 0;
+  z-index: 100;
+  width: 10px;
+  height: 10px;
+  opacity: 0;
+}
+
+.combat-test-corner-right {
+  right: 0;
 }
 
 // ========== 顶部标题 ==========
