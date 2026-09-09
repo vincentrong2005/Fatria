@@ -37,7 +37,20 @@ export async function selectCombatCG(params: {
   enemyName: string;
   playerGender: '男' | '女';
   phase: TurnState['phase'];
+  isExorcismBattle?: boolean;
 }): Promise<CombatCGSelection> {
+  // 驱魔 Boss 会使用“堕落风音”“堕落铃音”等阶段显示名。普通 CG
+  // 选择器的别名/包含匹配会把它们误识别成原角色，因此驱魔战不进入普通 CG 池。
+  if (params.isExorcismBattle) {
+    return {
+      imageUrl: null,
+      description: '',
+      eventName: null,
+      cgKey: null,
+      unlockedNewCG: false,
+    };
+  }
+
   const cgResult = selectCGEvent(params.enemyName, params.playerGender, params.phase === 'victory');
   if (!cgResult) {
     return {

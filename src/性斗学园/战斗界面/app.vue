@@ -6745,6 +6745,7 @@ async function selectAndDisplayCG() {
       enemyName: enemy.value.name,
       playerGender,
       phase: turnState.phase,
+      isExorcismBattle: exorcismBossDefinition.value !== null,
     });
 
     cgImageUrl.value = selection.imageUrl;
