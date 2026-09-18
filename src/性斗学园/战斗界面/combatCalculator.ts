@@ -16,7 +16,13 @@ export interface CombatResult {
   logs: string[];
   hitCount: number; // 实际命中次数
   totalDamage: number; // 连击总伤害
-  hits: { damage: number; isCritical: boolean; isDodged: boolean }[]; // 每次攻击的详情
+  hits: {
+    damage: number;
+    isCritical: boolean;
+    isDodged: boolean;
+    /** 部分闪避：本次命中只造成 50% 快感伤害。 */
+    isPartiallyDodged?: boolean;
+  }[]; // 每次攻击的详情
 }
 
 /**
@@ -125,22 +131,89 @@ export function applyDefenseReduction(
 }
 
 /**
- * 判定是否闪避
+ * 判定闪避结果（未闪避、部分闪避或完全闪避）。
  * @param attackerLuck 攻击者幸运
  * @param targetEvasion 目标闪避率
  * @param skillAccuracy 技能命中率
- * @returns 是否闪避成功
  */
-export function checkDodge(attackerLuck: number, targetEvasion: number, skillAccuracy: number): boolean {
-  // 计算最终命中率 = 技能基础命中率 - 目标闪避率 + (攻击者幸运 / 8)
+export type DodgeOutcome = 'none' | 'partial' | 'full';
+
+export interface DodgeCheckResult {
+  outcome: DodgeOutcome;
+  /** 本次攻击最终使用的总闪避概率（0-70）。 */
+  dodgeChance: number;
+  partialDodgeChance: number;
+  fullDodgeChance: number;
+}
+
+export interface DodgeChances {
+  dodgeChance: number;
+  partialDodgeChance: number;
+  fullDodgeChance: number;
+}
+
+/**
+ * 先由当前闪避率、技能命中和攻击者幸运算出有效总闪避率，再按开战时的构成比例拆分。
+ * 因此命中修正会同比缩放部分闪避和完全闪避，不会优先消耗完全闪避区间。
+ */
+export function calculateDodgeChances(
+  attackerLuck: number,
+  targetEvasion: number,
+  skillAccuracy: number,
+  dodgeProfileEvasion: number = targetEvasion,
+): DodgeChances {
   const finalAccuracy = skillAccuracy - targetEvasion + attackerLuck / 8;
-
-  // 命中率最低10%,最高95%
   const clampedAccuracy = Math.max(10, Math.min(95, finalAccuracy));
+  const dodgeChance = Math.max(0, Math.min(70, 100 - clampedAccuracy));
 
-  // 随机判定
+  const profileEvasion = Math.max(0, Math.min(70, dodgeProfileEvasion));
+  const profilePartialChance = Math.min(60, profileEvasion);
+  const profileFullChance = Math.max(0, profileEvasion - 60);
+
+  // 开战闪避为 0 时没有可继承的构成；后续获得的闪避全部视为部分闪避。
+  if (profileEvasion === 0) {
+    return { dodgeChance, partialDodgeChance: dodgeChance, fullDodgeChance: 0 };
+  }
+
+  const partialDodgeChance = dodgeChance * (profilePartialChance / profileEvasion);
+  const fullDodgeChance = dodgeChance * (profileFullChance / profileEvasion);
+  return {
+    dodgeChance,
+    partialDodgeChance,
+    fullDodgeChance,
+  };
+}
+
+/**
+ * 按一次随机投掷同时判定部分闪避和完全闪避。
+ * 开战时前 60 个百分点对应“闪避 50% 快感”，60-70 的部分对应完全闪避；
+ * 两个区间互斥，并在命中修正后保持开战时的比例。
+ */
+export function checkDodgeResult(
+  attackerLuck: number,
+  targetEvasion: number,
+  skillAccuracy: number,
+  dodgeProfileEvasion: number = targetEvasion,
+): DodgeCheckResult {
+  const chances = calculateDodgeChances(attackerLuck, targetEvasion, skillAccuracy, dodgeProfileEvasion);
   const roll = Math.random() * 100;
-  return roll >= clampedAccuracy;
+  if (roll < chances.partialDodgeChance) {
+    return { outcome: 'partial', ...chances };
+  }
+  if (roll < chances.partialDodgeChance + chances.fullDodgeChance) {
+    return { outcome: 'full', ...chances };
+  }
+  return { outcome: 'none', ...chances };
+}
+
+/** 兼容旧调用：仅将完全闪避视为 true，部分闪避仍属于命中。 */
+export function checkDodge(
+  attackerLuck: number,
+  targetEvasion: number,
+  skillAccuracy: number,
+  dodgeProfileEvasion: number = targetEvasion,
+): boolean {
+  return checkDodgeResult(attackerLuck, targetEvasion, skillAccuracy, dodgeProfileEvasion).outcome === 'full';
 }
 
 /**
@@ -217,7 +290,12 @@ export function executeAttack(
   },
 ): CombatResult {
   const logs: string[] = [];
-  const hits: { damage: number; isCritical: boolean; isDodged: boolean }[] = [];
+  const hits: {
+    damage: number;
+    isCritical: boolean;
+    isDodged: boolean;
+    isPartiallyDodged?: boolean;
+  }[] = [];
 
   // 获取连击次数，默认为1。hitCount=0 是纯支援/控制技能，不能被 || 误判为1段攻击。
   const normalizedHitCount = Number(skill.hitCount ?? 1);
@@ -262,20 +340,25 @@ export function executeAttack(
     }
 
     // 2. 判定闪避（每次攻击独立判定，天赋可保证命中）
-    const dodged = talentModifiers?.guaranteedHit
-      ? false
-      : checkDodge(attacker.stats.luck, target.stats.evasion, skill.accuracy);
-    if (dodged) {
+    const dodgeOutcome = talentModifiers?.guaranteedHit
+      ? 'none'
+      : checkDodgeResult(attacker.stats.luck, target.stats.evasion, skill.accuracy, target.stats.dodgeProfileEvasion)
+          .outcome;
+    if (dodgeOutcome === 'full') {
       hits.push({ damage: 0, isCritical: false, isDodged: true });
-      hitLog.push(`${target.name} 闪避了攻击!`);
+      hitLog.push(`${target.name} 完全闪避了攻击!`);
       if (hitCount > 1) {
-        hitLog.push(`本次伤害: 0 (被闪避)`);
+        hitLog.push(`本次伤害: 0 (被完全闪避)`);
       }
       logs.push(...hitLog);
       continue;
     }
 
     anyHit = true;
+    const isPartiallyDodged = dodgeOutcome === 'partial';
+    if (isPartiallyDodged) {
+      hitLog.push(`${target.name} 部分闪避，本次快感伤害降低 50%`);
+    }
 
     // 3. 判定暴击（每次攻击独立判定，天赋可保证暴击）
     const critical = talentModifiers?.guaranteedCrit
@@ -284,13 +367,11 @@ export function executeAttack(
     if (critical) anyCrit = true;
 
     let finalDamage = baseDamage;
-    let damageBeforeCap = baseDamage;
 
     if (critical) {
       // 基础暴击倍率1.5，天赋可额外增加
       const critMultiplier = 1.5 + (talentModifiers?.critDamageBoost || 0) / 100;
       finalDamage = Math.floor(baseDamage * critMultiplier);
-      damageBeforeCap = finalDamage;
       if (talentModifiers?.critDamageBoost) {
         hitLog.push(`暴击! 伤害提升${Math.floor(critMultiplier * 100)}%（含天赋加成）`);
       } else {
@@ -323,7 +404,7 @@ export function executeAttack(
 
     // 5. 应用buff修正
     finalDamage = applyBuffModifiers(finalDamage, attacker, target);
-    damageBeforeCap = finalDamage;
+    const damageBeforeCapAfterModifiers = finalDamage;
 
     // 6. 应用快感上限限制（每次攻击独立计算，最多造成目标最大快感的40%）
     const maxPleasureCap = Math.floor(target.stats.maxPleasure * 0.4);
@@ -333,12 +414,17 @@ export function executeAttack(
       cappedByLimit = true;
     }
 
-    hits.push({ damage: finalDamage, isCritical: critical, isDodged: false });
+    if (isPartiallyDodged) {
+      // 先应用每次攻击的快感上限，再减半，确保部分闪避最多承受半个上限。
+      finalDamage = Math.floor(finalDamage * 0.5);
+    }
+
+    hits.push({ damage: finalDamage, isCritical: critical, isDodged: false, isPartiallyDodged });
     totalActualDamage += finalDamage;
 
     // 详细的伤害日志
     if (cappedByLimit) {
-      hitLog.push(`伤害计算: ${damageBeforeCap} → ${finalDamage} (受40%上限限制)`);
+      hitLog.push(`伤害计算: ${damageBeforeCapAfterModifiers} → ${finalDamage} (受40%上限限制)`);
     } else {
       hitLog.push(`本次伤害: ${finalDamage}`);
     }

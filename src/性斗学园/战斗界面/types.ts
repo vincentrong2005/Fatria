@@ -18,6 +18,8 @@ export interface CombatStats {
   sexPower: number;
   baseEndurance: number;
   evasion: number;
+  /** 开战时的闪避率快照，用于在命中修正后保持部分/完全闪避的初始比例。 */
+  dodgeProfileEvasion: number;
   crit: number;
   charm: number;
   luck: number;

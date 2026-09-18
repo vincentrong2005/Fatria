@@ -942,10 +942,13 @@ const sealCanvas = ref<HTMLCanvasElement | null>(null);
 
 // BOSS阶段转换状态
 const isPhaseTransitioning = ref<boolean>(false);
-const phaseTransitionEffect = ref<'phase1to2' | 'phase2to3' | 'eden-game-over' | 'zhuang-fangyi-tide' | '' | null>(null);
+const phaseTransitionEffect = ref<'phase1to2' | 'phase2to3' | 'eden-game-over' | 'zhuang-fangyi-tide' | '' | null>(
+  null,
+);
 
 // 特效状态
-const effectType = ref<'critical' | 'dodge' | 'climax' | 'victory' | 'defeat' | null>(null);
+type CombatEffectType = 'critical' | 'partial-dodge' | 'dodge' | 'climax' | 'victory' | 'defeat';
+const effectType = ref<CombatEffectType | null>(null);
 const showEffect = ref(false);
 const companionAssistEffect = ref<{ name: string; avatarUrl: string; skillName: string } | null>(null);
 const yamadaHanakoEscapeDraw = ref(false);
@@ -1202,12 +1205,11 @@ function removeSealEffect(targetSelectors: string[]) {
 }
 
 /**
- * 计算闪避率（带递减收益）
- * - 0-60%: 1:1比例
- * - 60%-70%: 5:1比例（超过60的部分除以5）
- * - 上限: 70%
+ * 计算战斗中使用的闪避率数值（带递减收益）。
+ * 闪避判定由 combatCalculator.checkDodgeResult 负责：前60%为50%快感闪避，
+ * 60%-70%为完全闪避；这里仅负责将原始闪避属性归一化到0%-70%。
  *
- * 例如：原始闪避率100 -> 60 + (100-60)/5 = 60 + 8 = 68
+ * 例如：原始闪避率100 -> 60 + (100-60)/5 = 68
  * 达到70%上限需要原始闪避率110（60 + 50/5 = 70）
  */
 function calcEvasionWithDiminishingReturns(rawEvasion: number): number {
@@ -1812,6 +1814,9 @@ function applyEnemySnapshotToRuntime(
   enemy.value.stats.charm = snapshot.stats.charm;
   enemy.value.stats.luck = snapshot.stats.luck;
   enemy.value.stats.evasion = snapshot.stats.evasion;
+  if (resetResources) {
+    enemy.value.stats.dodgeProfileEvasion = snapshot.stats.evasion;
+  }
   enemy.value.stats.crit = snapshot.stats.crit;
   enemy.value.statusEffects = statusListToEffects(enemyRuntimeStatuses.value, 'enemy_');
 
@@ -2048,6 +2053,7 @@ async function loadFromMvu() {
     player.value.stats.charm = playerSnapshot.stats.charm;
     player.value.stats.luck = playerSnapshot.stats.luck;
     player.value.stats.evasion = playerSnapshot.stats.evasion;
+    player.value.stats.dodgeProfileEvasion = playerSnapshot.stats.evasion;
     player.value.stats.crit = playerSnapshot.stats.crit;
     player.value.stats.sexPower = playerSnapshot.stats.sexPower;
     player.value.stats.baseEndurance = playerSnapshot.stats.endurance;
@@ -2341,6 +2347,8 @@ async function loadFromMvu() {
     console.info('[战斗界面] 对手名称:', enemyName);
 
     await loadEnemyRuntimeData(data, maxClimaxCount);
+    // 双方的闪避构成在整场战斗开始时锁定，后续状态与 Boss 阶段变化只影响总闪避率。
+    enemy.value.stats.dodgeProfileEvasion = enemy.value.stats.evasion;
 
     // 加载玩家物品 - 从物品系统.背包读取"战斗用品"为true的消耗品
     const backpack = _.get(data, '物品系统.背包', {});
@@ -4509,7 +4517,7 @@ async function reloadStatusFromMvu() {
 }
 
 // 触发战斗特效
-function triggerEffect(type: 'critical' | 'dodge' | 'climax' | 'victory' | 'defeat') {
+function triggerEffect(type: CombatEffectType) {
   effectType.value = type;
   showEffect.value = true;
   setTimeout(() => {
@@ -5545,9 +5553,10 @@ async function handlePlayerSkill(skill: Skill) {
       );
 
       let hasDirectDamage = false;
+      const hasPartialDodge = result.hits.some(hit => hit.isPartiallyDodged);
 
       if (result.isDodged) {
-        addLog(`${playerAttackTarget.name} 闪避了所有攻击！`, 'system', 'info');
+        addLog(`${playerAttackTarget.name} 完全闪避了所有攻击！`, 'system', 'info');
         triggerEffect('dodge');
         await applyPlayerAttackActions(
           createPlayerDodgedActions({
@@ -5572,7 +5581,7 @@ async function handlePlayerSkill(skill: Skill) {
           // 使用totalDamage而不是actualDamage（连击总伤害）
           if (result.isCritical) {
             addLog(`暴击！总计造成 ${result.totalDamage} 点快感！`, 'player', 'critical');
-            triggerEffect('critical');
+            triggerEffect(hasPartialDodge ? 'partial-dodge' : 'critical');
             await applyPlayerAttackActions(
               createPlayerCriticalHitActions({
                 sinType: TalentSystem.getSinTalentType(playerTalent.value),
@@ -5583,6 +5592,9 @@ async function handlePlayerSkill(skill: Skill) {
             );
           } else {
             addLog(`总计造成 ${result.totalDamage} 点快感`, 'player', 'damage');
+            if (hasPartialDodge) {
+              triggerEffect('partial-dodge');
+            }
           }
 
           // 应用伤害（结算快感）- 使用totalDamage
@@ -6104,15 +6116,19 @@ async function runEnemySkillAction(playerWasBoundAtEnemyTurnStart: boolean) {
       }
 
       const hasDazedDirectDamage = dazedResult.hits.length > 0 || dazedResult.totalDamage > 0;
+      const hasDazedPartialDodge = dazedResult.hits.some(hit => hit.isPartiallyDodged);
       if (dazedResult.isDodged) {
-        addLog(`${nextEnemy.name} 闪避了失控的动作！`, 'system', 'info');
+        addLog(`${nextEnemy.name} 完全闪避了失控的动作！`, 'system', 'info');
         triggerEffect('dodge');
       } else if (hasDazedDirectDamage) {
         if (dazedResult.isCritical) {
           addLog(`暴击！${nextEnemy.name} 对自己造成 ${dazedResult.totalDamage} 点快感！`, 'enemy', 'critical');
-          triggerEffect('critical');
+          triggerEffect(hasDazedPartialDodge ? 'partial-dodge' : 'critical');
         } else {
           addLog(`${nextEnemy.name} 对自己造成 ${dazedResult.totalDamage} 点快感`, 'enemy', 'damage');
+          if (hasDazedPartialDodge) {
+            triggerEffect('partial-dodge');
+          }
         }
 
         const oldEnemyPleasure = nextEnemy.stats.currentPleasure;
@@ -7141,7 +7157,6 @@ async function handleZhuangFangyiPhaseTransition(nextPhase: 2 | 3) {
   setTimeout(() => {
     phaseTransitionEffect.value = null;
   }, 1500);
-
 }
 
 // 处理高潮后的逻辑（自动继续，不显示按钮）
@@ -9751,7 +9766,12 @@ function getSinTalentDisplayName(sinType: string): string {
 // 庄方宜的深渊潮汐：冷色高压水牢与鳞光从屏幕边缘回卷。
 .phase-transition-effect.zhuang-fangyi-tide {
   .transition-flash {
-    background: radial-gradient(circle at center, rgba(34, 211, 238, 0.62) 0%, rgba(15, 23, 42, 0.78) 48%, transparent 76%);
+    background: radial-gradient(
+      circle at center,
+      rgba(34, 211, 238, 0.62) 0%,
+      rgba(15, 23, 42, 0.78) 48%,
+      transparent 76%
+    );
     animation-duration: 1.2s;
   }
 

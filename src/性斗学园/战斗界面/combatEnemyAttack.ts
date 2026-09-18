@@ -80,7 +80,7 @@ export type EnemySkillAttackEvent =
     }
   | {
       kind: 'effect';
-      effect: 'critical' | 'dodge';
+      effect: 'critical' | 'partial-dodge' | 'dodge';
     }
   | {
       kind: 'enemyBossActions';
@@ -491,6 +491,7 @@ export function resolveEnemySkillAttack(params: {
   }
 
   const result = executeAttack(params.enemy, params.player, params.skill.data, false, enemyAttackModifiers.options);
+  const hasPartialDodge = result.hits.some(hit => hit.isPartiallyDodged);
   if (params.damageMultiplier && params.damageMultiplier !== 1) {
     result.totalDamage = Math.max(0, Math.floor(result.totalDamage * params.damageMultiplier));
     result.actualDamage = Math.max(0, Math.floor(result.actualDamage * params.damageMultiplier));
@@ -509,7 +510,7 @@ export function resolveEnemySkillAttack(params: {
   beforeDialogueEvents.push(createLogEvent(`${params.enemy.name} 使用了 ${params.skill.name}！`, 'enemy', 'info'));
 
   if (result.isDodged) {
-    afterDialogueEvents.push(createLogEvent(`${params.player.name} 闪避了所有攻击！`, 'system', 'info'));
+    afterDialogueEvents.push(createLogEvent(`${params.player.name} 完全闪避了所有攻击！`, 'system', 'info'));
     afterDialogueEvents.push({ kind: 'effect', effect: 'dodge' });
 
     const enemyDodgedBossResult = createEnemyDodgedBossResult({
@@ -533,16 +534,17 @@ export function resolveEnemySkillAttack(params: {
     if (!hasDirectDamage) {
       finalDamage = 0;
     } else if (result.isCritical) {
-      afterDialogueEvents.push(
-        createLogEvent(`暴击！总计造成 ${result.totalDamage} 点快感！`, 'enemy', 'critical'),
-      );
-      afterDialogueEvents.push({ kind: 'effect', effect: 'critical' });
+      afterDialogueEvents.push(createLogEvent(`暴击！总计造成 ${result.totalDamage} 点快感！`, 'enemy', 'critical'));
+      afterDialogueEvents.push({ kind: 'effect', effect: hasPartialDodge ? 'partial-dodge' : 'critical' });
       afterDialogueEvents.push({
         kind: 'playerTalentActions',
         actions: createPlayerCriticalHitTalentActions(params.sinType, params.talentState),
       });
     } else {
       afterDialogueEvents.push(createLogEvent(`总计造成 ${result.totalDamage} 点快感`, 'enemy', 'damage'));
+      if (hasPartialDodge) {
+        afterDialogueEvents.push({ kind: 'effect', effect: 'partial-dodge' });
+      }
     }
 
     if (hasDirectDamage) {

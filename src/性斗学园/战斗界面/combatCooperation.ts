@@ -36,7 +36,7 @@ export interface CompanionAttackLog {
 export interface CompanionAttackResolution {
   result: CombatResult;
   logs: CompanionAttackLog[];
-  effect: 'critical' | 'dodge' | null;
+  effect: 'critical' | 'partial-dodge' | 'dodge' | null;
   finalDamage: number;
   shouldApplySkillEffects: boolean;
 }
@@ -233,6 +233,7 @@ function createCompanionCharacter(params: {
       sexPower: params.baseData.对手性斗力,
       baseEndurance: params.baseData.对手忍耐力,
       evasion: calcEvasionWithDiminishingReturns(params.baseData.对手闪避率),
+      dodgeProfileEvasion: calcEvasionWithDiminishingReturns(params.baseData.对手闪避率),
       crit: params.baseData.对手暴击率,
       charm: params.baseData.对手魅力,
       luck: params.baseData.对手幸运,
@@ -312,11 +313,12 @@ export function resolveCompanionSkillAttack(params: {
   ];
 
   const result = executeAttack(params.companion, params.target, params.skill.data, true);
+  const hasPartialDodge = result.hits.some(hit => hit.isPartiallyDodged);
   let finalDamage = 0;
 
   if (result.isDodged) {
     logs.push({
-      message: `${params.target.name} 闪避了协同攻击！`,
+      message: `${params.target.name} 完全闪避了协同攻击！`,
       source: 'system',
       type: 'info',
     });
@@ -351,7 +353,7 @@ export function resolveCompanionSkillAttack(params: {
   return {
     result,
     logs,
-    effect: result.isDodged ? 'dodge' : result.isCritical ? 'critical' : null,
+    effect: result.isDodged ? 'dodge' : hasPartialDodge ? 'partial-dodge' : result.isCritical ? 'critical' : null,
     finalDamage,
     shouldApplySkillEffects: !result.isDodged,
   };

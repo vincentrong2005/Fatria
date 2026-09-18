@@ -15,12 +15,13 @@
 import { ref, watch } from 'vue';
 
 const props = defineProps<{
-  type: 'critical' | 'dodge' | 'climax' | 'victory' | 'defeat';
+  type: 'critical' | 'partial-dodge' | 'dodge' | 'climax' | 'victory' | 'defeat';
   show: boolean;
 }>();
 
 const iconMap = {
   critical: '💥',
+  'partial-dodge': '💨',
   dodge: '✨',
   climax: '💫',
   victory: '🎉',
@@ -29,7 +30,8 @@ const iconMap = {
 
 const textMap = {
   critical: '暴击！',
-  dodge: '闪避！',
+  'partial-dodge': '闪避！',
+  dodge: '完全闪避！',
   climax: '高潮！',
   victory: '胜利！',
   defeat: '败北...',
@@ -106,6 +108,22 @@ watch(
       0 0 20px #60a5fa,
       0 0 40px #3b82f6,
       0 0 60px #2563eb;
+    animation: effect-full-dodge 0.7s ease-out;
+  }
+}
+
+.partial-dodge {
+  .effect-icon,
+  .effect-text {
+    color: #5eead4;
+    text-shadow:
+      0 0 16px #5eead4,
+      0 0 32px #14b8a6,
+      0 0 48px #0f766e;
+  }
+
+  .effect-icon {
+    animation: effect-partial-dodge 0.6s ease-out;
   }
 }
 
@@ -166,6 +184,36 @@ watch(
   }
   100% {
     transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes effect-partial-dodge {
+  0% {
+    transform: translateX(70px) scale(0.75);
+    opacity: 0;
+  }
+  55% {
+    transform: translateX(-12px) scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes effect-full-dodge {
+  0% {
+    transform: scale(0.35) rotate(-18deg);
+    opacity: 0;
+  }
+  45% {
+    transform: scale(1.3) rotate(8deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
     opacity: 1;
   }
 }
