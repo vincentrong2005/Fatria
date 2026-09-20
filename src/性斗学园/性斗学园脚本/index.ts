@@ -11,7 +11,7 @@
  */
 
 import { get, isEqual, set } from '@/util/common';
-import { createScriptIdDiv } from '@/util/script';
+import { createScriptIdDiv, deteleportStyle, teleportStyle } from '@/util/script';
 import {
   migrateLegacyCGUnlocksToCharacterVariables,
   unlockMaxFavorCharacterCGsFromMvuData,
@@ -1357,6 +1357,8 @@ function initStatusBar() {
   if (statusBarApp) return;
 
   try {
+    // 状态栏挂载在酒馆主页面，组件样式需要从脚本 iframe 同步到主页面。
+    teleportStyle();
     statusBarContainer = createScriptIdDiv();
     statusBarContainer.css({
       position: 'fixed',
@@ -1422,6 +1424,10 @@ function initStatusBar() {
     statusBarContainer?.remove();
     statusBarContainer = null;
     console.error('[性斗学园脚本] 初始化状态栏失败:', error);
+    deteleportStyle();
+    statusBarContainer?.remove();
+    statusBarContainer = null;
+    statusBarApp = null;
   }
 }
 
@@ -1505,6 +1511,7 @@ if (isPrimaryScriptInstance) {
       statusBarContainer.remove();
       statusBarContainer = null;
     }
+    deteleportStyle();
     clearUserInfoSyncTimers();
     if (periodicUpdateTimer) {
       clearInterval(periodicUpdateTimer);

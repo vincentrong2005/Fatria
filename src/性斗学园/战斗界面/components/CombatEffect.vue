@@ -15,7 +15,7 @@
 import { ref, watch } from 'vue';
 
 const props = defineProps<{
-  type: 'critical' | 'partial-dodge' | 'dodge' | 'climax' | 'victory' | 'defeat';
+  type: 'critical' | 'partial-dodge' | 'dodge' | 'climax' | 'victory' | 'defeat' | 'escape-success' | 'escape-failure';
   show: boolean;
 }>();
 
@@ -26,6 +26,8 @@ const iconMap = {
   climax: '💫',
   victory: '🎉',
   defeat: '💔',
+  'escape-success': '⛓️',
+  'escape-failure': '⛓️',
 };
 
 const textMap = {
@@ -35,6 +37,8 @@ const textMap = {
   climax: '高潮！',
   victory: '胜利！',
   defeat: '败北...',
+  'escape-success': '挣脱成功！',
+  'escape-failure': '挣脱失败！',
 };
 
 const icon = ref(iconMap[props.type]);
@@ -161,6 +165,36 @@ watch(
   }
 }
 
+.escape-success {
+  .effect-icon,
+  .effect-text {
+    color: #67e8f9;
+    text-shadow:
+      0 0 20px #67e8f9,
+      0 0 40px #22d3ee,
+      0 0 60px #0891b2;
+  }
+
+  .effect-icon {
+    animation: effect-chain-break 0.7s ease-out;
+  }
+}
+
+.escape-failure {
+  .effect-icon,
+  .effect-text {
+    color: #f87171;
+    text-shadow:
+      0 0 20px #f87171,
+      0 0 40px #ef4444,
+      0 0 60px #b91c1c;
+  }
+
+  .effect-content {
+    animation: effect-failure-rattle 0.42s linear;
+  }
+}
+
 // 动画
 @keyframes effect-pulse {
   0% {
@@ -228,6 +262,35 @@ watch(
   }
   75% {
     transform: scale(1.1) rotate(-5deg);
+  }
+}
+
+@keyframes effect-chain-break {
+  0% {
+    transform: scale(0.45) rotate(-24deg);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.3) rotate(12deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+
+@keyframes effect-failure-rattle {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25%,
+  75% {
+    transform: translateX(-12px);
+  }
+  50% {
+    transform: translateX(12px);
   }
 }
 

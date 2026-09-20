@@ -1,5 +1,5 @@
 <template>
-  <div class="combat-wrapper">
+  <div class="combat-wrapper" :class="{ 'escape-failure-shake': isEscapeFailureShaking }">
     <div
       aria-hidden="true"
       class="combat-test-corner combat-test-corner-right"
@@ -180,6 +180,24 @@
               <div v-if="activeMenu === 'main'" key="main" class="menu-main">
                 <Card hover class="menu-card" @click="activeMenu = 'skills'">
                   <svg
+                    v-if="playerBoundTurns > 0"
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="32"
+                    height="32"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="icon-cyan"
+                  >
+                    <path d="m10.5 13.5-2 2a3.5 3.5 0 0 1-5-5l3-3a3.5 3.5 0 0 1 5 0" />
+                    <path d="m13.5 10.5 2-2a3.5 3.5 0 0 1 5 5l-3 3a3.5 3.5 0 0 1-5 0" />
+                    <path d="m8 16 8-8" />
+                  </svg>
+                  <svg
+                    v-else
                     xmlns="http://www.w3.org/2000/svg"
                     width="32"
                     height="32"
@@ -194,7 +212,7 @@
                     <path d="m16 16 4 4" />
                     <path d="m19 21 2-2" />
                   </svg>
-                  <span>战斗技能</span>
+                  <span>{{ playerBoundTurns > 0 ? '挣脱' : '战斗技能' }}</span>
                 </Card>
                 <Card
                   :hover="!isItemsDisabled"
@@ -317,26 +335,117 @@
               </div>
 
               <!-- 技能菜单 -->
-              <div v-else-if="activeMenu === 'skills'" key="skills" class="menu-skills">
-                <Card
-                  v-for="skill in player.skills"
-                  :key="skill.id"
-                  :hover="playerBoundTurns <= 0 && !isSkillDisabled(skill)"
-                  class="skill-card"
-                  :class="{
-                    disabled: playerBoundTurns <= 0 && isSkillDisabled(skill),
-                    'bound-blocked': playerBoundTurns > 0,
-                    'unusable-shake': unusableSkillFeedbackId === skill.id,
-                  }"
-                  @click="handlePlayerSkill(skill)"
-                  @mouseenter="showSkillEffectTooltip(skill, $event)"
-                  @mouseleave="hideSkillEffectTooltip(skill.id)"
-                  @touchstart="startSkillEffectLongPress(skill, $event)"
-                  @touchend="finishSkillEffectTouch"
-                  @touchcancel="cancelSkillEffectLongPress"
-                  @touchmove="cancelSkillEffectLongPress"
-                  @contextmenu.prevent="showSkillEffectTooltip(skill, $event)"
-                >
+              <div
+                v-else-if="activeMenu === 'skills'"
+                key="skills"
+                class="menu-skills"
+                :class="{ 'escape-menu': playerBoundTurns > 0 }"
+              >
+                <template v-if="playerBoundTurns > 0">
+                  <Card
+                    v-for="action in escapeActions"
+                    :key="action.id"
+                    :hover="!isEscapeActionDisabled(action)"
+                    class="escape-card"
+                    :class="[action.id, { disabled: isEscapeActionDisabled(action) }]"
+                    @click="handleEscapeAction(action)"
+                    @mouseenter="showEscapeEffectTooltip(action, $event)"
+                    @mouseleave="hideSkillEffectTooltip(action.tooltipId)"
+                    @touchstart="startEscapeEffectLongPress(action, $event)"
+                    @touchend="finishSkillEffectTouch"
+                    @touchcancel="cancelSkillEffectLongPress"
+                    @touchmove="cancelSkillEffectLongPress"
+                    @contextmenu.prevent="showEscapeEffectTooltip(action, $event)"
+                  >
+                    <div class="escape-header">
+                      <div class="escape-icon" aria-hidden="true">
+                        <svg
+                          v-if="action.id === 'finesse'"
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="26"
+                          height="26"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="m10.5 13.5-2 2a3.5 3.5 0 0 1-5-5l3-3a3.5 3.5 0 0 1 5 0" />
+                          <path d="m13.5 10.5 2-2a3.5 3.5 0 0 1 5 5l-3 3a3.5 3.5 0 0 1-5 0" />
+                          <path d="m8 16 8-8" />
+                        </svg>
+                        <svg
+                          v-else
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="26"
+                          height="26"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="m13 2-8 12h6l-1 8 9-13h-6z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <span class="escape-name">{{ action.name }}</span>
+                        <p class="escape-desc">{{ action.description }}</p>
+                      </div>
+                    </div>
+                    <div class="escape-stats-row">
+                      <span class="escape-stat chance">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M12 7v5l3 2" />
+                        </svg>
+                        成功率 {{ formatEscapeChance(action.chance) }}%
+                      </span>
+                      <span class="escape-stat cost" :class="{ 'cost-danger': isEscapeActionDisabled(action) }">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                        >
+                          <path d="M13 2 3 14h7l-1 8 12-14h-7z" />
+                        </svg>
+                        {{ action.staminaCost > 0 ? `${action.staminaCost} 耐力` : '不耗耐力' }}
+                      </span>
+                    </div>
+                    <span class="escape-turn-cost">成功或失败都会结束本回合</span>
+                  </Card>
+                </template>
+                <template v-else>
+                  <Card
+                    v-for="skill in player.skills"
+                    :key="skill.id"
+                    :hover="!isSkillDisabled(skill)"
+                    class="skill-card"
+                    :class="{
+                      disabled: isSkillDisabled(skill),
+                      'unusable-shake': unusableSkillFeedbackId === skill.id,
+                    }"
+                    @click="handlePlayerSkill(skill)"
+                    @mouseenter="showSkillEffectTooltip(skill, $event)"
+                    @mouseleave="hideSkillEffectTooltip(skill.id)"
+                    @touchstart="startSkillEffectLongPress(skill, $event)"
+                    @touchend="finishSkillEffectTouch"
+                    @touchcancel="cancelSkillEffectLongPress"
+                    @touchmove="cancelSkillEffectLongPress"
+                    @contextmenu.prevent="showSkillEffectTooltip(skill, $event)"
+                  >
                   <div v-if="skill.currentCooldown > 0" class="cooldown-overlay">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -433,7 +542,8 @@
                       {{ skill.data?.accuracyModifier || 100 }}%
                     </span>
                   </div>
-                </Card>
+                  </Card>
+                </template>
                 <button class="back-btn" @click="activeMenu = 'main'">返回</button>
               </div>
 
@@ -879,6 +989,83 @@ const enemyBoundTurns = combatRuntime.enemyBoundTurns; // 敌人被束缚的回�
 const playerBindSource = combatRuntime.playerBindSource; // 玩家束缚的施加者
 const enemyBindSource = combatRuntime.enemyBindSource; // 敌人束缚的施加者
 
+function formatEscapeChance(chance: number): string {
+  return Number.isInteger(chance) ? String(chance) : chance.toFixed(1);
+}
+
+function getEffectiveEscapeLuck(luck: number): number {
+  return Math.min(200, Math.max(0, luck));
+}
+
+function calculateFinesseEscapeChance(escaper: Character, restrainer: Character): number {
+  const powerGap = Math.max(
+    -1,
+    Math.min(
+      1,
+      (escaper.stats.sexPower - restrainer.stats.sexPower) /
+        Math.max(escaper.stats.sexPower, restrainer.stats.sexPower, 1),
+    ),
+  );
+  return Math.max(3, Math.min(40, 8 + getEffectiveEscapeLuck(escaper.stats.luck) * 0.09 + powerGap * 20));
+}
+
+function calculateForceEscapeCost(maxEndurance: number): number {
+  return Math.ceil(maxEndurance * 0.35);
+}
+
+function calculateForceEscapeChance(luck: number): number {
+  return Math.max(58, Math.min(80, 58 + getEffectiveEscapeLuck(luck) * 0.11));
+}
+
+const escapeActions = computed<EscapeAction[]>(() => {
+  const finesseChance = calculateFinesseEscapeChance(player.value, enemy.value);
+  const forceCost = calculateForceEscapeCost(player.value.stats.maxEndurance);
+  const forceChance = calculateForceEscapeChance(player.value.stats.luck);
+
+  return [
+    {
+      id: 'finesse',
+      tooltipId: 'escape_finesse',
+      name: '巧劲挣脱',
+      description: '寻找束缚空隙，借力脱身。',
+      chance: finesseChance,
+      staminaCost: 0,
+      tooltipEffects: [
+        {
+          label: `成功率 ${formatEscapeChance(finesseChance)}%`,
+          description: '幸运按最高200计算，并受双方当前性斗力差距修正。',
+          tone: 'control',
+        },
+        {
+          label: '不消耗耐力',
+          description: '无论成功或失败，都会结束本回合且不会获得跳过回合的额外回复。',
+          tone: 'resource',
+        },
+      ],
+    },
+    {
+      id: 'force',
+      tooltipId: 'escape_force',
+      name: '强行挣脱',
+      description: '爆发体力，强行撕开束缚。',
+      chance: forceChance,
+      staminaCost: forceCost,
+      tooltipEffects: [
+        {
+          label: `成功率 ${formatEscapeChance(forceChance)}%`,
+          description: '幸运按最高200计算，不受双方性斗力差距影响。',
+          tone: 'control',
+        },
+        {
+          label: `耐力 -${forceCost}`,
+          description: '消耗最大耐力的35%。体力不足时不可使用；成功或失败都会结束本回合。',
+          tone: 'resource',
+        },
+      ],
+    },
+  ];
+});
+
 // 感官麻木状态（束缚解除后获得，期间再次被束缚只持续1回合）
 const playerSensoryNumb = combatRuntime.playerSensoryNumb; // 玩家感官麻木剩余回合
 const enemySensoryNumb = combatRuntime.enemySensoryNumb; // 敌人感官麻木剩余回合
@@ -947,9 +1134,19 @@ const phaseTransitionEffect = ref<'phase1to2' | 'phase2to3' | 'eden-game-over' |
 );
 
 // 特效状态
-type CombatEffectType = 'critical' | 'partial-dodge' | 'dodge' | 'climax' | 'victory' | 'defeat';
+type CombatEffectType =
+  | 'critical'
+  | 'partial-dodge'
+  | 'dodge'
+  | 'climax'
+  | 'victory'
+  | 'defeat'
+  | 'escape-success'
+  | 'escape-failure';
 const effectType = ref<CombatEffectType | null>(null);
 const showEffect = ref(false);
+const isEscapeFailureShaking = ref(false);
+let escapeFailureShakeTimer: ReturnType<typeof setTimeout> | null = null;
 const companionAssistEffect = ref<{ name: string; avatarUrl: string; skillName: string } | null>(null);
 const yamadaHanakoEscapeDraw = ref(false);
 const equipmentSkillVisualEffect = ref<EquipmentSkillVisualState | null>(null);
@@ -974,6 +1171,18 @@ interface SkillEffectTooltipItem {
   label: string;
   description: string;
   tone: 'buff' | 'debuff' | 'resource' | 'control' | 'special';
+}
+
+type EscapeActionId = 'finesse' | 'force';
+
+interface EscapeAction {
+  id: EscapeActionId;
+  tooltipId: string;
+  name: string;
+  description: string;
+  chance: number;
+  staminaCost: number;
+  tooltipEffects: SkillEffectTooltipItem[];
 }
 
 interface SkillEffectTooltipState {
@@ -3061,6 +3270,15 @@ function showItemEffectTooltip(item: Item, event?: Event, placement = getSkillEf
   };
 }
 
+function showEscapeEffectTooltip(action: EscapeAction, event?: Event, placement = getSkillEffectTooltipPlacement(event)) {
+  skillEffectTooltip.value = {
+    skillId: action.tooltipId,
+    title: `${action.name} · 挣脱说明`,
+    effects: action.tooltipEffects,
+    ...placement,
+  };
+}
+
 function hideSkillEffectTooltip(skillId?: string) {
   if (!skillId || skillEffectTooltip.value?.skillId === skillId) {
     skillEffectTooltip.value = null;
@@ -3121,6 +3339,26 @@ function startItemEffectLongPress(item: Item, event?: Event) {
   }, 450);
 }
 
+function startEscapeEffectLongPress(action: EscapeAction, event?: Event) {
+  cancelSkillEffectLongPress();
+
+  const placement = getSkillEffectTooltipPlacement(event);
+  skillEffectLongPressTimer = setTimeout(() => {
+    showEscapeEffectTooltip(action, undefined, placement);
+    skillEffectLongPressTimer = null;
+    skillEffectClickGuardId = action.tooltipId;
+    if (skillEffectClickGuardTimer) {
+      clearTimeout(skillEffectClickGuardTimer);
+    }
+    skillEffectClickGuardTimer = setTimeout(() => {
+      if (skillEffectClickGuardId === action.tooltipId) {
+        skillEffectClickGuardId = null;
+      }
+      skillEffectClickGuardTimer = null;
+    }, 1600);
+  }, 450);
+}
+
 function finishSkillEffectTouch() {
   cancelSkillEffectLongPress();
 }
@@ -3141,6 +3379,19 @@ function shouldIgnoreSkillClickFromLongPress(skill: Skill): boolean {
 function shouldIgnoreItemClickFromLongPress(item: Item): boolean {
   const sourceId = `item_${item.id}`;
   if (skillEffectClickGuardId !== sourceId) {
+    return false;
+  }
+
+  skillEffectClickGuardId = null;
+  if (skillEffectClickGuardTimer) {
+    clearTimeout(skillEffectClickGuardTimer);
+    skillEffectClickGuardTimer = null;
+  }
+  return true;
+}
+
+function shouldIgnoreEscapeClickFromLongPress(action: EscapeAction): boolean {
+  if (skillEffectClickGuardId !== action.tooltipId) {
     return false;
   }
 
@@ -4528,6 +4779,58 @@ function triggerEffect(type: CombatEffectType) {
   }, 1500);
 }
 
+function triggerEscapeFeedback(escaped: boolean) {
+  triggerEffect(escaped ? 'escape-success' : 'escape-failure');
+
+  if (escapeFailureShakeTimer) {
+    clearTimeout(escapeFailureShakeTimer);
+    escapeFailureShakeTimer = null;
+  }
+  isEscapeFailureShaking.value = false;
+
+  if (escaped) {
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    isEscapeFailureShaking.value = true;
+    escapeFailureShakeTimer = setTimeout(() => {
+      isEscapeFailureShaking.value = false;
+      escapeFailureShakeTimer = null;
+    }, 420);
+  });
+}
+
+function resolveEnemyBoundEscape(): boolean {
+  const useForceEscape =
+    enemy.value.stats.currentEndurance >= enemy.value.stats.maxEndurance * 0.5;
+  const actionName = useForceEscape ? '强行挣脱' : '巧劲挣脱';
+  const chance = useForceEscape
+    ? calculateForceEscapeChance(enemy.value.stats.luck)
+    : calculateFinesseEscapeChance(enemy.value, player.value);
+
+  addLog(`${enemy.value.name} 使用了${actionName}！`, 'enemy', 'info');
+
+  if (useForceEscape) {
+    const staminaCost = calculateForceEscapeCost(enemy.value.stats.maxEndurance);
+    enemy.value.stats.currentEndurance = Math.max(0, enemy.value.stats.currentEndurance - staminaCost);
+    pushExplicitResourcePopup('enemy', 'stamina', -staminaCost);
+    addLog(`${enemy.value.name} 为${actionName}消耗了 ${staminaCost} 点体力`, 'system', 'info');
+  }
+
+  const escaped = Math.random() * 100 < chance;
+  if (escaped) {
+    enemyBoundTurns.value = 0;
+    enemyBindSource.value = null;
+    addLog(`${enemy.value.name}${actionName}成功，摆脱了束缚！`, 'enemy', 'buff');
+  } else {
+    addLog(`${enemy.value.name}${actionName}失败，束缚仍未解除。`, 'enemy', 'debuff');
+  }
+  triggerEscapeFeedback(escaped);
+
+  return escaped;
+}
+
 function triggerCharacterReaction(side: CombatSide, type: CharacterCombatReaction['type'], label: string) {
   const reactionRef = side === 'player' ? playerCombatReaction : enemyCombatReaction;
   const existingTimer = combatReactionTimers[side];
@@ -4940,6 +5243,10 @@ function getDisplaySkillCost(skill: Skill): number {
 
 function isSkillDisabled(skill: Skill): boolean {
   return isSkillActionDisabled(skill, player.value.stats.currentEndurance, getSkillCostContext(skill));
+}
+
+function isEscapeActionDisabled(action: EscapeAction): boolean {
+  return action.staminaCost > 0 && player.value.stats.currentEndurance < action.staminaCost;
 }
 
 async function applyPlayerTalentActions(actions: PlayerTalentAction[]) {
@@ -5757,6 +6064,59 @@ async function handlePlayerSkill(skill: Skill) {
   });
 }
 
+async function handleEscapeAction(action: EscapeAction) {
+  if (shouldIgnoreEscapeClickFromLongPress(action)) {
+    return;
+  }
+  hideSkillEffectTooltip(action.tooltipId);
+
+  if (turnState.phase !== 'playerInput' || playerBoundTurns.value <= 0) {
+    return;
+  }
+
+  if (isEscapeActionDisabled(action)) {
+    addLog(`体力不足，无法使用${action.name}！需要 ${action.staminaCost} 点体力`, 'system', 'info');
+    return;
+  }
+
+  turnState.phase = 'processing';
+
+  try {
+    addLog(`${player.value.name} 使用了${action.name}！`, 'player', 'info');
+
+    if (action.staminaCost > 0) {
+      player.value.stats.currentEndurance -= action.staminaCost;
+      pushExplicitResourcePopup('player', 'stamina', -action.staminaCost);
+      addLog(`${player.value.name} 为${action.name}消耗了 ${action.staminaCost} 点体力`, 'system', 'info');
+    }
+
+    const escaped = Math.random() * 100 < action.chance;
+    if (escaped) {
+      playerBoundTurns.value = 0;
+      playerBindSource.value = null;
+      addLog(`${player.value.name}${action.name}成功，摆脱了束缚！`, 'player', 'buff');
+    } else {
+      addLog(`${player.value.name}${action.name}失败，束缚仍未解除。`, 'player', 'debuff');
+    }
+    triggerEscapeFeedback(escaped);
+
+    activeMenu.value = 'main';
+    await saveToMvu();
+
+    setTimeout(() => {
+      if (!isBattleFlowLocked()) {
+        void handleEnemyTurn();
+      }
+    }, 1000);
+  } catch (error) {
+    console.error('[战斗界面] 挣脱行动失败', error);
+    addLog('挣脱行动失败，请重试。', 'system', 'critical');
+    if (!isBattleFlowLocked()) {
+      turnState.phase = 'playerInput';
+    }
+  }
+}
+
 async function commitPlayerItemUseState(
   nextPlayer: Character,
   nextEnemy: Character,
@@ -6331,7 +6691,10 @@ async function handleEnemyTurn() {
       return;
     }
 
-    await applyEnemyTurnStartActions(boundTurnResolution.tickActions);
+    const enemyEscaped = resolveEnemyBoundEscape();
+    if (!enemyEscaped) {
+      await applyEnemyTurnStartActions(boundTurnResolution.tickActions);
+    }
     void finishTurnAndMaybeStartNextTurn();
     return;
   }
@@ -7900,6 +8263,25 @@ function getSinTalentDisplayName(sinType: string): string {
   font-family: 'Noto Sans SC', system-ui, sans-serif;
   color: #e2e8f0;
   overflow-x: hidden;
+
+  &.escape-failure-shake {
+    animation: escapeFailureShake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  }
+}
+
+@keyframes escapeFailureShake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-7px);
+  }
+  40%,
+  80% {
+    transform: translateX(7px);
+  }
 }
 
 .combat-test-corner {
@@ -8254,6 +8636,26 @@ function getSinTalentDisplayName(sinType: string): string {
   }
 }
 
+.menu-skills.escape-menu {
+  height: auto;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  overflow-x: hidden;
+  overflow-y: visible;
+
+  .escape-card {
+    flex: 1 1 calc((100% - 0.4rem) / 2);
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .back-btn {
+    flex: 0 0 100%;
+    width: 100%;
+  }
+}
+
 .menu-card {
   flex: 1;
   min-width: 0;
@@ -8329,6 +8731,9 @@ function getSinTalentDisplayName(sinType: string): string {
 .icon-blue {
   color: #38bdf8;
 }
+.icon-cyan {
+  color: #67e8f9;
+}
 .icon-green {
   color: #4ade80;
 }
@@ -8391,6 +8796,94 @@ function getSinTalentDisplayName(sinType: string): string {
   &.unusable-shake {
     animation: unusableSkillShake 0.38s linear;
   }
+}
+
+.escape-card {
+  --escape-accent: #67e8f9;
+  flex: 0 0 auto;
+  width: 235px;
+  min-width: 235px;
+  max-width: 260px;
+  min-height: 8.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.7rem;
+  overflow: hidden;
+  border-left: 3px solid var(--escape-accent);
+  background: rgba(15, 43, 59, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(103, 232, 249, 0.1), 0 16px 34px rgba(0, 0, 0, 0.2);
+
+  &.force {
+    --escape-accent: #fbbf24;
+    background: rgba(64, 42, 14, 0.72);
+    box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.1), 0 16px 34px rgba(0, 0, 0, 0.2);
+  }
+
+  &.disabled {
+    cursor: not-allowed;
+    filter: grayscale(0.45);
+    opacity: 0.58;
+  }
+}
+
+.escape-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+
+.escape-icon {
+  flex: 0 0 2.25rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  color: var(--escape-accent);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid color-mix(in srgb, var(--escape-accent) 38%, transparent);
+  border-radius: 0.5rem;
+}
+
+.escape-name {
+  display: block;
+  color: #f8fafc;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.escape-desc {
+  margin: 0.22rem 0 0;
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.escape-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem 0.65rem;
+}
+
+.escape-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  color: rgba(226, 232, 240, 0.9);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+
+  &.chance {
+    color: var(--escape-accent);
+  }
+}
+
+.escape-turn-cost {
+  color: rgba(203, 213, 225, 0.58);
+  font-size: 0.62rem;
+  line-height: 1.2;
 }
 
 .equipment-skill-card {

@@ -19,6 +19,7 @@ function shouldKeepNarrationLog(log: CombatLogEntry): boolean {
   ) {
     return true;
   }
+  if (message.includes('挣脱') && (message.includes('成功') || message.includes('失败'))) return true;
   if (message.includes('被束缚了') && message.includes('无法行动')) return true;
   if (message.includes('选择了投降') || message.includes('不能逃跑')) return true;
   if (message.includes('自慰') || message.includes('上贡') || message.includes('诱惑')) return true;

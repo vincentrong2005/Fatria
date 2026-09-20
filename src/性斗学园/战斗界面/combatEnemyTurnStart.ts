@@ -229,7 +229,7 @@ export function createBoundEnemyTurnStartResult(params: {
   const actions: EnemyTurnStartAction[] = [
     {
       kind: 'log',
-      message: `${params.enemyName} 被束缚了，无法行动！剩余 ${params.boundTurns} 回合`,
+      message: `${params.enemyName} 被束缚了，无法使用常规技能！剩余 ${params.boundTurns} 回合`,
       source: 'system',
       type: 'info',
     },
