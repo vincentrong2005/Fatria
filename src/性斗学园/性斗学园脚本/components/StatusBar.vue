@@ -325,6 +325,39 @@
                     </section>
                   </details>
 
+                  <section class="settings-section cheat-code-section">
+                    <div class="settings-section-title">
+                      <span>兑换码</span>
+                    </div>
+
+                    <form class="cheat-code-form" @submit.prevent="redeemPhoneCheatCode">
+                      <label class="settings-text-field">
+                        <span>输入兑换码</span>
+                        <input
+                          v-model="cheatCodeInput"
+                          type="text"
+                          autocomplete="off"
+                          autocapitalize="characters"
+                          spellcheck="false"
+                          placeholder="输入代码"
+                          :disabled="isRedeemingCheatCode"
+                        />
+                      </label>
+                      <button
+                        class="settings-action-primary"
+                        type="submit"
+                        :disabled="isRedeemingCheatCode || !cheatCodeInput.trim()"
+                      >
+                        <i class="fas fa-ticket"></i>
+                        {{ isRedeemingCheatCode ? '兑换中' : '兑换' }}
+                      </button>
+                    </form>
+
+                    <div v-if="cheatCodeStatus" class="cheat-code-status" :class="{ success: cheatCodeStatusOk }">
+                      {{ cheatCodeStatus }}
+                    </div>
+                  </section>
+
                   <details class="settings-category-panel" open>
                     <summary class="settings-category-heading">
                       <span>后街设置</span>
@@ -964,6 +997,7 @@ import {
   saveIndexedImageDataUrl,
 } from '../../shared/indexedImageStore';
 import { getLatestMvuData } from '../../shared/mvuStore';
+import { redeemCheatCode } from '../../shared/cheatCodes';
 import {
   DEFAULT_SECONDARY_PHONE_API_SETTINGS,
   fetchSecondaryPhoneApiModels,
@@ -1222,6 +1256,10 @@ const resetSettingTargets = ref({
   backstreet: false,
   image: false,
 });
+const cheatCodeInput = ref('');
+const cheatCodeStatus = ref('');
+const cheatCodeStatusOk = ref(false);
+const isRedeemingCheatCode = ref(false);
 let wallpaperSourceRequestId = 0;
 let phoneDragState: PhoneDragState = null;
 
@@ -1345,6 +1383,32 @@ function persistSecondaryApiSettings(settings: SecondaryPhoneApiSettings = secon
 
 function setPage(page: PageKey) {
   currentPage.value = page;
+}
+
+async function redeemPhoneCheatCode() {
+  if (isRedeemingCheatCode.value || !cheatCodeInput.value.trim()) return;
+
+  isRedeemingCheatCode.value = true;
+  cheatCodeStatus.value = '';
+  cheatCodeStatusOk.value = false;
+  try {
+    const result = await redeemCheatCode(cheatCodeInput.value);
+    cheatCodeStatus.value = result.message;
+    cheatCodeStatusOk.value = result.ok;
+    if (result.ok) {
+      cheatCodeInput.value = '';
+      await refreshPhoneData('兑换码');
+      if (typeof toastr !== 'undefined') toastr.success(result.message || '兑换成功', result.title);
+    } else if (typeof toastr !== 'undefined') {
+      toastr.warning(result.message, result.title);
+    }
+  } catch (error) {
+    console.error('[性斗学园手机] 兑换码执行失败:', error);
+    cheatCodeStatus.value = '兑换失败，请检查 MVU 变量';
+    if (typeof toastr !== 'undefined') toastr.error(cheatCodeStatus.value, '错误');
+  } finally {
+    isRedeemingCheatCode.value = false;
+  }
 }
 
 function clampNumber(value: number, min: number, max: number): number {
@@ -3453,6 +3517,56 @@ onUnmounted(() => {
     &:hover {
       background: linear-gradient(145deg, #45bdca, #2d8799);
     }
+  }
+}
+
+.cheat-code-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+
+  .settings-text-field {
+    min-width: 0;
+    margin-top: 0;
+  }
+
+  > button {
+    min-width: 76px;
+    height: 40px;
+    border: 1px solid rgba(45, 151, 169, 0.36);
+    border-radius: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    color: #fff;
+    background: linear-gradient(145deg, #38aebc, #247b8c);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 900;
+
+    &:hover {
+      background: linear-gradient(145deg, #45bdca, #2d8799);
+    }
+
+    &:disabled {
+      cursor: wait;
+      opacity: 0.68;
+    }
+  }
+}
+
+.cheat-code-status {
+  margin-top: 10px;
+  color: #a54e4e;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.45;
+  white-space: pre-line;
+
+  &.success {
+    color: #277d69;
   }
 }
 

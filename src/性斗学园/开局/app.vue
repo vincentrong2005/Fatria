@@ -559,6 +559,7 @@ import { ENEMY_DATABASE } from '@/性斗学园/战斗界面/enemyDatabase';
 import { ENEMY_SKILL_MAP, ENEMY_SKILLS } from '@/性斗学园/战斗界面/enemySkillDatabase';
 import { syncInitialSetupFromMvu as syncFromMvu } from '@/性斗学园/shared/initialSetupSync';
 import { getActivatedCheatCodes, saveActivatedCheatCodes } from '@/性斗学园/shared/localPreferences';
+import { isKnownCheatCode, normalizeCheatCode, redeemCheatCode } from '@/性斗学园/shared/cheatCodes';
 import { getLatestMvuData as getMvuData, updateLatestStatData as updateMvuVariables } from '@/性斗学园/shared/mvuStore';
 import {
   XIAOYEYUE_LIGHT_DARK_CONSTITUTION_ID,
@@ -690,11 +691,21 @@ const applyCheatCode = async () => {
   isApplyingCheatCode.value = true;
 
   try {
-    let code = cheatCode.value.trim().toUpperCase();
+    const code = normalizeCheatCode(cheatCode.value);
 
-    // 处理 1011 的别名
-    if (code === 'LOLI' || code === 'LOLICON') {
-      code = '1011';
+    // 开局与小手机共用同一兑换码服务，保证物品和兑换记录一致。
+    if (isKnownCheatCode(code)) {
+      showCheatInput.value = false;
+      cheatCode.value = '';
+
+      const result = await redeemCheatCode(code);
+      activatedCheatCodes.value = getActivatedCheatCodes();
+      if (result.ok && code === '0210') {
+        updateCharacterData({ difficulty: Difficulty.CHEATER });
+        isCheatActive.value = true;
+      }
+      openModal(result.title, result.message);
+      return;
     }
 
     // 检查是否已激活
