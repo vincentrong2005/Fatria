@@ -3,6 +3,34 @@
     <div class="panel-inner">
       <!-- 角色名 -->
       <div class="character-name">{{ character.name }}</div>
+      <div v-if="isEnemy && traitItems.length > 0" class="trait-list">
+        <span
+          v-for="trait in traitItems"
+          :key="trait.id"
+          class="trait-badge-wrap"
+          @pointerenter="handleTraitPointerEnter(trait, $event)"
+          @pointerleave="handleTraitPointerLeave(trait, $event)"
+          @pointerdown="handleTraitPointerDown(trait, $event)"
+          @pointerup="handleTraitPointerUp(trait, $event)"
+          @pointercancel="handleTraitPointerCancel(trait)"
+        >
+          <span
+            class="trait-badge"
+            :class="`rarity-${trait.rarity.toLowerCase()}`"
+            :aria-describedby="activeTraitId === trait.id ? `trait-description-${trait.id}` : undefined"
+          >
+            {{ trait.name }}
+          </span>
+          <span
+            v-if="activeTraitId === trait.id"
+            :id="`trait-description-${trait.id}`"
+            class="trait-tooltip"
+            role="tooltip"
+          >
+            {{ trait.description }}
+          </span>
+        </span>
+      </div>
 
       <!-- 头像与悬停属性 -->
       <div class="avatar-container" :class="combatReaction ? `reaction-${combatReaction.type}` : undefined">
@@ -111,8 +139,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { getRandomImageUrl } from '../constants';
+import type { EnemyTraitDefinition } from '../traitSystem';
 import type { Character, Skill, TurnState } from '../types';
 import ProgressBar from './ProgressBar.vue';
 import StatsPanel from './StatsPanel.vue';
@@ -131,6 +160,8 @@ interface CharacterCombatReaction {
   label: string;
 }
 
+type TraitDisplayItem = Pick<EnemyTraitDefinition, 'id' | 'name' | 'rarity' | 'description'>;
+
 const props = defineProps<{
   character: Character;
   isEnemy: boolean;
@@ -138,7 +169,57 @@ const props = defineProps<{
   enemyIntention: Skill | null;
   resourcePopups?: ResourcePopup[];
   combatReaction?: CharacterCombatReaction | null;
+  traitItems?: TraitDisplayItem[];
 }>();
+
+const traitItems = computed(() => props.traitItems ?? []);
+const activeTraitId = ref<string | null>(null);
+let traitLongPressTimer: ReturnType<typeof setTimeout> | null = null;
+let traitLongPressTriggered = false;
+
+function clearTraitLongPressTimer(): void {
+  if (traitLongPressTimer !== null) {
+    clearTimeout(traitLongPressTimer);
+    traitLongPressTimer = null;
+  }
+}
+
+function handleTraitPointerEnter(trait: TraitDisplayItem, event: PointerEvent): void {
+  if (event.pointerType === 'mouse') activeTraitId.value = trait.id;
+}
+
+function handleTraitPointerLeave(trait: TraitDisplayItem, event: PointerEvent): void {
+  clearTraitLongPressTimer();
+  if (event.pointerType === 'mouse' && activeTraitId.value === trait.id) activeTraitId.value = null;
+}
+
+function handleTraitPointerDown(trait: TraitDisplayItem, event: PointerEvent): void {
+  clearTraitLongPressTimer();
+  traitLongPressTriggered = false;
+  if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
+  if (activeTraitId.value !== trait.id) activeTraitId.value = null;
+
+  traitLongPressTimer = setTimeout(() => {
+    traitLongPressTriggered = true;
+    activeTraitId.value = trait.id;
+    traitLongPressTimer = null;
+  }, 450);
+}
+
+function handleTraitPointerUp(trait: TraitDisplayItem, event: PointerEvent): void {
+  const wasTouch = event.pointerType === 'touch' || event.pointerType === 'pen';
+  clearTraitLongPressTimer();
+  if (wasTouch && !traitLongPressTriggered && activeTraitId.value === trait.id) activeTraitId.value = null;
+}
+
+function handleTraitPointerCancel(trait: TraitDisplayItem): void {
+  clearTraitLongPressTimer();
+  if (activeTraitId.value === trait.id && !traitLongPressTriggered) activeTraitId.value = null;
+}
+
+onBeforeUnmount(() => {
+  clearTraitLongPressTimer();
+});
 
 const staminaPopups = computed(() => (props.resourcePopups ?? []).filter(popup => popup.resource === 'stamina'));
 const pleasurePopups = computed(() => (props.resourcePopups ?? []).filter(popup => popup.resource === 'pleasure'));
@@ -218,6 +299,103 @@ const zapIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" 
   @media (min-width: 1024px) {
     font-size: 1.1rem;
     margin-bottom: 0.75rem;
+  }
+}
+
+.trait-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.3rem;
+  width: 100%;
+  margin: -0.25rem 0 0.55rem;
+  overflow: visible;
+}
+
+.trait-badge-wrap {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+  touch-action: manipulation;
+}
+
+.trait-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.65rem;
+  padding: 0.28rem 0.62rem;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: nowrap;
+  box-shadow: 0 0.2rem 0.6rem rgba(0, 0, 0, 0.2);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+
+  .trait-badge-wrap:hover & {
+    transform: translateY(-1px);
+    box-shadow: 0 0.3rem 0.8rem rgba(0, 0, 0, 0.3);
+  }
+}
+
+.rarity-b {
+  border-color: rgba(96, 165, 250, 0.8);
+  background: rgba(30, 64, 175, 0.78);
+  color: #dbeafe;
+}
+
+.rarity-a {
+  border-color: rgba(192, 132, 252, 0.82);
+  background: rgba(107, 33, 168, 0.8);
+  color: #f3e8ff;
+}
+
+.rarity-s {
+  border-color: rgba(250, 204, 21, 0.9);
+  background: rgba(146, 64, 14, 0.84);
+  color: #fef3c7;
+  box-shadow: 0 0.2rem 0.7rem rgba(245, 158, 11, 0.25);
+}
+
+.trait-tooltip {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 0.45rem);
+  left: 50%;
+  width: max-content;
+  max-width: min(17rem, calc(100vw - 2rem));
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 0.35rem;
+  background: rgba(15, 23, 42, 0.96);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: normal;
+  text-align: left;
+  pointer-events: none;
+  transform: translateX(-50%);
+  box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.4);
+
+  @media (min-width: 1024px) {
+    font-size: 0.78rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .trait-badge {
+    min-height: 1.55rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+  }
+
+  .trait-tooltip {
+    max-width: min(16rem, calc(100vw - 1.5rem));
   }
 }
 

@@ -162,6 +162,19 @@
       </div>
     </div>
 
+    <div class="difficulty-card trait-settings-card">
+      <div class="difficulty-header">
+        <i class="fas fa-tags"></i>
+        <span>敌人词条</span>
+      </div>
+      <div class="difficulty-content trait-settings-content">
+        <span class="difficulty-hint-text">高难度战斗会为敌人抽取并保留词条</span>
+        <button class="trait-toggle" :class="{ active: enemyTraitsEnabled }" @click="toggleEnemyTraits">
+          <span>{{ enemyTraitsEnabled ? '已启用' : '已关闭' }}</span>
+        </button>
+      </div>
+    </div>
+
     <!-- 难度确认弹窗 -->
     <div v-if="showConfirmModal" class="confirm-modal-overlay" @click.self="cancelDifficultyChange">
       <div class="confirm-modal">
@@ -197,6 +210,8 @@
 import { computed, ref } from 'vue';
 import { getLatestMvuData, replaceLatestMvuData, runLatestMvuTransaction } from '../../../shared/mvuStore';
 import { getPlayerDerivedStats } from '../../../shared/statSelectors';
+import { isEnemyTraitsEnabled, setEnemyTraitsEnabled } from '../../../shared/combatSettings';
+import { clearEnemyTraitProfiles } from '../../../战斗界面/traitPersistence';
 
 const props = defineProps<{
   characterData: any;
@@ -230,6 +245,8 @@ const difficultyLevels: Record<string, number> = {
   普通: 1,
   困难: 2,
   抖M: 3,
+  // 作弊是隐藏难度，但仍必须参与内部的不可降级比较。
+  作弊: 4,
 };
 
 // 当前难度
@@ -240,6 +257,7 @@ const currentDifficulty = computed(() => {
 // 弹窗状态
 const showConfirmModal = ref(false);
 const pendingDifficulty = ref<string | null>(null);
+const enemyTraitsEnabled = ref(isEnemyTraitsEnabled());
 
 // 判断某难度是否比当前难度低（无法选择）
 function isDifficultyLower(difficulty: string): boolean {
@@ -299,6 +317,19 @@ function cancelDifficultyChange() {
   pendingDifficulty.value = null;
 }
 
+function toggleEnemyTraits() {
+  const next = !enemyTraitsEnabled.value;
+  if (!setEnemyTraitsEnabled(next)) {
+    toastr.error('词条设置保存失败');
+    return;
+  }
+  enemyTraitsEnabled.value = next;
+  if (!next) {
+    clearEnemyTraitProfiles();
+  }
+  toastr.info(next ? '敌人词条已启用' : '敌人词条已关闭，已有词条将在当前聊天清除');
+}
+
 // 获取难度标签
 function getDifficultyLabel(difficulty: string | null): string {
   if (!difficulty) return '';
@@ -337,6 +368,33 @@ function formatNumber(num: number): string {
   gap: 14px;
   overflow-y: auto;
   flex: 1;
+}
+
+.trait-settings-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.difficulty-hint-text {
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 0.75rem;
+}
+
+.trait-toggle {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 0.35rem;
+  padding: 0.45rem 0.7rem;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.65);
+  cursor: pointer;
+}
+
+.trait-toggle.active {
+  border-color: rgba(74, 222, 128, 0.6);
+  color: #bbf7d0;
+  background: rgba(22, 101, 52, 0.45);
 }
 
 .top-row {

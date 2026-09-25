@@ -5,12 +5,19 @@ import { executeAttack, type CombatResult } from './combatCalculator';
 import type { Character, CombatLogEntry, Skill } from './types';
 import * as TalentSystem from './talentSystem';
 import type { TimedStatusEffect } from '../shared/statusEngine';
+import { getTraitModifiers, hasTrait, type EnemyTraitRuntimeState } from './traitSystem';
 
 export interface EnemyAttackOptions {
   guaranteedHit: boolean;
   guaranteedCrit: boolean;
   extraHitCount: number;
+  critRateBonus?: number;
   damageMultiplier?: number;
+  attackerLevelOverride?: number;
+  targetLevelOverride?: number;
+  traitIds?: string[];
+  traitRuntime?: EnemyTraitRuntimeState;
+  currentTurn?: number;
 }
 
 export interface EnemyAttackModifierResult {
@@ -462,6 +469,11 @@ export function resolveEnemySkillAttack(params: {
   damageMultiplier?: number;
   attackDamageMultiplier?: number;
   guaranteedCritFromStatus?: boolean;
+  attackerLevelOverride?: number;
+  targetLevelOverride?: number;
+  traitIds?: string[];
+  traitRuntime?: import('./traitSystem').EnemyTraitRuntimeState;
+  currentTurn?: number;
 }): EnemySkillAttackResolution {
   if (!params.skill.data) {
     throw new Error(`技能 ${params.skill.name} 的数据不存在，无法使用`);
@@ -488,6 +500,39 @@ export function resolveEnemySkillAttack(params: {
   if (params.attackDamageMultiplier && params.attackDamageMultiplier > 0 && params.attackDamageMultiplier !== 1) {
     enemyAttackModifiers.options.damageMultiplier =
       (enemyAttackModifiers.options.damageMultiplier ?? 1) * params.attackDamageMultiplier;
+  }
+  if (typeof params.attackerLevelOverride === 'number')
+    enemyAttackModifiers.options.attackerLevelOverride = params.attackerLevelOverride;
+  if (typeof params.targetLevelOverride === 'number')
+    enemyAttackModifiers.options.targetLevelOverride = params.targetLevelOverride;
+  const traitModifiers = getTraitModifiers(params.traitIds || []);
+  if (traitModifiers.skillDamageMultiplier) {
+    enemyAttackModifiers.options.damageMultiplier =
+      (enemyAttackModifiers.options.damageMultiplier ?? 1) * (1 + traitModifiers.skillDamageMultiplier);
+  }
+  if (hasTrait(params.traitIds || [], 'trait_combo_enhance') && Number(params.skill.data.hitCount || 1) > 1) {
+    enemyAttackModifiers.options.extraHitCount += 1;
+  }
+  if (
+    hasTrait(params.traitIds || [], 'trait_first_strike') &&
+    (params.currentTurn || 0) <= 2 &&
+    params.traitRuntime?.firstStrikeActive
+  ) {
+    enemyAttackModifiers.options.damageMultiplier = (enemyAttackModifiers.options.damageMultiplier ?? 1) * 1.25;
+    enemyAttackModifiers.options.critRateBonus = (enemyAttackModifiers.options.critRateBonus ?? 0) + 20;
+  }
+  if (hasTrait(params.traitIds || [], 'trait_desperation')) {
+    const pleasureRatio =
+      params.enemy.stats.maxPleasure > 0 ? params.enemy.stats.currentPleasure / params.enemy.stats.maxPleasure : 0;
+    enemyAttackModifiers.options.damageMultiplier =
+      (enemyAttackModifiers.options.damageMultiplier ?? 1) * (1 + pleasureRatio * 0.5);
+  }
+  if (
+    hasTrait(params.traitIds || [], 'trait_adaptation') &&
+    params.traitRuntime?.adaptationSkillId === params.skill.id &&
+    (params.traitRuntime.adaptationUses || 0) >= 2
+  ) {
+    enemyAttackModifiers.options.damageMultiplier = (enemyAttackModifiers.options.damageMultiplier ?? 1) * 0.6;
   }
 
   const result = executeAttack(params.enemy, params.player, params.skill.data, false, enemyAttackModifiers.options);
@@ -596,11 +641,11 @@ export function queueEnemySkillBattleDialogue(bossState: BossState, playerGender
 
   let battleDialogue: BossSystem.BossDialogue | undefined;
   if (bossState.bossId === 'muxinlan') {
-    battleDialogue = BossSystem.getRandomBattleDialogue(bossState.currentPhase);
+    battleDialogue = BossSystem.getRandomBattleDialogue(bossState.currentPhase) ?? undefined;
   } else if (bossState.bossId === 'christine') {
-    battleDialogue = BossSystem.getChristineRandomBattleDialogue(bossState.currentPhase as 1 | 2);
+    battleDialogue = BossSystem.getChristineRandomBattleDialogue(bossState.currentPhase as 1 | 2) ?? undefined;
   } else if (bossState.bossId === 'vespera') {
-    battleDialogue = BossSystem.getVesperaRandomBattleDialogue(playerGender);
+    battleDialogue = BossSystem.getVesperaRandomBattleDialogue(playerGender) ?? undefined;
   }
 
   if (battleDialogue) {

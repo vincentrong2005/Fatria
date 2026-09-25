@@ -20,6 +20,7 @@ import {
 import { CURRENT_BOSS_DEFINITIONS } from '../战斗界面/bossDefinitions';
 import { normalizeCombatClimaxLimit } from './combatLimits';
 import { getXiaoyeyueLightDarkDynamicBonusCorrection } from './xiaoyeyueMagicGirl';
+import { applyTraitModifiersToEnemyBase } from '../战斗界面/traitSystem';
 
 const FALLBACK_ENEMY_BASE_DATA: EnemyBaseData = {
   对手等级: 1,
@@ -37,7 +38,9 @@ const FALLBACK_ENEMY_BASE_DATA: EnemyBaseData = {
 };
 
 const FIXED_BOSS_PHASE_DATA_KEYS = new Set(
-  CURRENT_BOSS_DEFINITIONS.flatMap(definition => definition.phases.map(phase => normalizeEnemyName(phase.dataKey))),
+  CURRENT_BOSS_DEFINITIONS.flatMap(definition =>
+    definition.phases.map(phase => normalizeEnemyName(phase.dataKey || '')),
+  ),
 );
 
 export interface CombatResources {
@@ -56,6 +59,12 @@ export interface CombatantSnapshot {
   resources: CombatResources;
   stats: DerivedCombatStats;
   statuses: StatusList;
+}
+
+export interface EnemySnapshotContext {
+  traitIds?: string[];
+  npcLevel?: number;
+  effectiveLevelOverride?: number;
 }
 
 function readNumber(data: any, path: string, fallback: number): number {
@@ -159,24 +168,36 @@ export function getResolvedEnemyName(statData: any): string {
   return rawName ? resolveEnemyName(rawName) : '';
 }
 
-export function getResolvedEnemyBaseData(statData: any): EnemyBaseData | null {
+export function getResolvedEnemyBaseData(statData: any, context: EnemySnapshotContext = {}): EnemyBaseData | null {
   const enemyName = getResolvedEnemyName(statData);
   if (!enemyName) {
     return null;
   }
 
-  const baseData = getEnemyBaseDataByName(enemyName) ?? FALLBACK_ENEMY_BASE_DATA;
+  const databaseData = getEnemyBaseDataByName(enemyName);
+  const baseData = databaseData ?? FALLBACK_ENEMY_BASE_DATA;
   if (FIXED_BOSS_PHASE_DATA_KEYS.has(normalizeEnemyName(enemyName))) {
-    return baseData;
+    return context.traitIds?.length
+      ? (applyTraitModifiersToEnemyBase(baseData as any, context.traitIds) as EnemyBaseData)
+      : baseData;
   }
 
   const userLevel = readNumber(statData, '角色基础._等级', 1);
   const difficulty = readString(statData, '角色基础.难度', '普通');
-  return applyDifficultyCoefficient(applyLevelScaling(baseData, userLevel), difficulty);
+  const npcLevel = Math.max(20, Math.min(100, Math.round(context.npcLevel ?? userLevel + 8)));
+  const scaled = databaseData ? applyLevelScaling(baseData, userLevel) : applyLevelScaling(baseData, npcLevel + 8);
+  const resolved = applyDifficultyCoefficient(scaled, difficulty);
+  return context.traitIds?.length
+    ? (applyTraitModifiersToEnemyBase(resolved as any, context.traitIds) as EnemyBaseData)
+    : resolved;
 }
 
-export function getEnemyDerivedStats(statData: any, runtimeStatuses: StatusList = {}): DerivedCombatStats | null {
-  const enemyData = getResolvedEnemyBaseData(statData);
+export function getEnemyDerivedStats(
+  statData: any,
+  runtimeStatuses: StatusList = {},
+  context: EnemySnapshotContext = {},
+): DerivedCombatStats | null {
+  const enemyData = getResolvedEnemyBaseData(statData, context);
   if (!enemyData) {
     return null;
   }
@@ -206,9 +227,13 @@ export function calculateEnemyStatusBonus(runtimeStatuses: StatusList = {}): Bon
   return calculateBonusFromStatusList(runtimeStatuses);
 }
 
-export function getEnemySnapshot(statData: any, runtimeStatuses: StatusList = {}): CombatantSnapshot | null {
-  const enemyData = getResolvedEnemyBaseData(statData);
-  const stats = getEnemyDerivedStats(statData, runtimeStatuses);
+export function getEnemySnapshot(
+  statData: any,
+  runtimeStatuses: StatusList = {},
+  context: EnemySnapshotContext = {},
+): CombatantSnapshot | null {
+  const enemyData = getResolvedEnemyBaseData(statData, context);
+  const stats = getEnemyDerivedStats(statData, runtimeStatuses, context);
   if (!enemyData || !stats) {
     return null;
   }

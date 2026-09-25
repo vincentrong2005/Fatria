@@ -1,5 +1,6 @@
 import type { StatusList } from '../shared/statusEngine';
 import type { StatusEffect } from './types';
+import { getStatusDisplayName } from './combatSkillEffects';
 
 const BONUS_LABELS: Record<string, string> = {
   魅力加成: '魅力',
@@ -89,7 +90,7 @@ export function statusListToEffects(statusList: StatusList | Record<string, unkn
     if (duration <= 0) return;
 
     const bonuses = readStatusBonuses(val);
-    let displayName = name;
+    let displayName = getStatusDisplayName(name);
     let type: 'buff' | 'debuff' = 'buff';
 
     if (Object.keys(bonuses).length > 0) {

@@ -68,6 +68,13 @@ const EFFECT_TYPE_LABELS: Record<string, string> = {
 
 const SPECIAL_EFFECT_TYPES = new Set(['敏感', '乏力', '迷离', '集中', '反弹', '吸取快感']);
 
+const EFFECT_TYPE_PREFIXES = Object.keys(EFFECT_TYPE_LABELS).sort((left, right) => right.length - left.length);
+
+function extractEffectType(value: string): string | null {
+  const normalized = String(value || '').replace(/^协同_/, '');
+  return EFFECT_TYPE_PREFIXES.find(type => normalized === type || normalized.startsWith(`${type}_`)) ?? null;
+}
+
 export function readSkillEffectList(
   statData: Record<string, any>,
   enemyRuntimeSkillEffects: Record<string, any>,
@@ -250,12 +257,22 @@ export function buildResourceChangeLog(
 }
 
 export function getEffectTypeName(effectType: string): string {
-  return EFFECT_TYPE_LABELS[effectType] || effectType;
+  const exactLabel = EFFECT_TYPE_LABELS[effectType];
+  if (exactLabel) return exactLabel;
+
+  const extractedType = extractEffectType(effectType);
+  if (extractedType) return EFFECT_TYPE_LABELS[extractedType];
+
+  // 内部状态键不应直接出现在玩家可见文本中。
+  return String(effectType).includes('_') ? String(effectType).split('_')[0] || '状态效果' : effectType;
+}
+
+export function getStatusDisplayName(statusKey: string): string {
+  return getEffectTypeName(statusKey);
 }
 
 export function buildExpiredStatusLogs(ownerName: string, expiredStatusKeys: string[]): string[] {
   return expiredStatusKeys.map(statusKey => {
-    const effectType = statusKey.split('_')[0];
-    return `${ownerName} 的 ${getEffectTypeName(effectType)} 效果消失了`;
+    return `${ownerName} 的 ${getStatusDisplayName(statusKey)} 效果消失了`;
   });
 }

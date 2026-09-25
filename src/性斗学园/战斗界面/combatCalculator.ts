@@ -223,9 +223,14 @@ export function checkDodge(
  * @param skillCritModifier 技能暴击修正
  * @returns 是否暴击
  */
-export function checkCritical(attackerCrit: number, attackerLuck: number, skillCritModifier: number): boolean {
+export function checkCritical(
+  attackerCrit: number,
+  attackerLuck: number,
+  skillCritModifier: number,
+  critRateBonus = 0,
+): boolean {
   // 计算最终暴击率 = 基础暴击率 + (幸运 / 8) + 技能修正
-  const finalCritRate = attackerCrit + attackerLuck / 8 + skillCritModifier;
+  const finalCritRate = attackerCrit + attackerLuck / 8 + skillCritModifier + critRateBonus;
 
   // 暴击率最低0%,最高100%
   const clampedCritRate = Math.max(0, Math.min(100, finalCritRate));
@@ -287,6 +292,9 @@ export function executeAttack(
     damageMultiplier?: number;
     critDamageBoost?: number;
     extraHitCount?: number;
+    critRateBonus?: number;
+    attackerLevelOverride?: number;
+    targetLevelOverride?: number;
   },
 ): CombatResult {
   const logs: string[] = [];
@@ -363,7 +371,12 @@ export function executeAttack(
     // 3. 判定暴击（每次攻击独立判定，天赋可保证暴击）
     const critical = talentModifiers?.guaranteedCrit
       ? true
-      : checkCritical(attacker.stats.crit, attacker.stats.luck, skill.critModifier);
+      : checkCritical(
+          attacker.stats.crit,
+          attacker.stats.luck,
+          skill.critModifier,
+          talentModifiers?.critRateBonus || 0,
+        );
     if (critical) anyCrit = true;
 
     let finalDamage = baseDamage;
@@ -397,8 +410,8 @@ export function executeAttack(
       finalDamage,
       targetEndurance,
       isPlayerAttacking,
-      attacker.stats.level,
-      target.stats.level,
+      talentModifiers?.attackerLevelOverride ?? attacker.stats.level,
+      talentModifiers?.targetLevelOverride ?? target.stats.level,
     );
     finalDamage = damageAfterDefense;
 
