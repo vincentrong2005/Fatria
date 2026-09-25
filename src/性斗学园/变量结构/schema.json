@@ -506,6 +506,18 @@
                   "加成属性": {
                     "$ref": "#/$defs/__schema0"
                   },
+                  "永久属性": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "number"
+                    }
+                  },
+                  "永久加成": {
+                    "$ref": "#/$defs/__schema0"
+                  },
                   "耐力增加": {
                     "type": "number"
                   },

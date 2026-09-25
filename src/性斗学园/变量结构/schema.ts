@@ -190,6 +190,10 @@ const EquipmentInBagSchema = BaseItemSchema.extend({
 const ConsumableItemSchema = BaseItemSchema.extend({
   类型: z.literal('消耗品'),
   加成属性: BonusSchema.optional(),
+  /** 使用后写入基础属性，例如 { 魅力: 2, 幸运: 1 }。 */
+  永久属性: z.record(z.string(), z.coerce.number()).optional(),
+  /** 使用后合并到永久状态.状态列表的加成。 */
+  永久加成: BonusSchema.optional(),
   耐力增加: z.coerce.number().optional(),
   快感降低: z.coerce.number().optional(),
   快感增加: z.coerce.number().optional(),

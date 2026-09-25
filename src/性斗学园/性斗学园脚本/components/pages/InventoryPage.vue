@@ -141,9 +141,24 @@
             </div>
           </div>
 
+          <div
+            v-if="item.类型 === '消耗品' && hasPermanentConsumableEffect(itemKey, item)"
+            class="item-permanent-inline"
+          >
+            <i class="fas fa-sparkles"></i>
+            <span>永久效果：{{ describePermanentConsumableEffect(itemKey, item) }}</span>
+          </div>
+
           <!-- 装备按钮（仅装备类型显示） -->
           <button v-if="item.类型 === '装备' && item.部位" class="equip-btn" @click.stop="equipItem(itemKey, item)">
             <i class="fas fa-hand-sparkles"></i> 装备
+          </button>
+          <button
+            v-if="item.类型 === '消耗品' && hasPermanentConsumableEffect(itemKey, item)"
+            class="use-consumable-btn"
+            @click.stop="usePermanentConsumable(itemKey, item)"
+          >
+            <i class="fas fa-wand-magic-sparkles"></i> 使用
           </button>
         </div>
       </div>
@@ -177,6 +192,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { getLatestMvuData, replaceLatestMvuData, runLatestMvuTransaction } from '../../../shared/mvuStore';
+import {
+  applyPermanentConsumableEffect,
+  describePermanentConsumableEffect,
+  hasPermanentConsumableEffect,
+} from '../../../shared/permanentConsumables';
 import { calculateEquipmentBonus } from '../../../shared/statSelectors';
 
 const props = defineProps<{
@@ -566,6 +586,50 @@ function consumeOneBackpackEquipment(statData: any, itemKey: string) {
   }
 
   delete statData.物品系统.背包[itemKey];
+}
+
+async function usePermanentConsumable(itemKey: string, item: any) {
+  if (item?.类型 !== '消耗品' || !hasPermanentConsumableEffect(itemKey, item)) {
+    return;
+  }
+
+  try {
+    await runLatestMvuTransaction('使用永久消耗品', async () => {
+      const mvuData = await getLatestMvuData();
+      const statData = mvuData?.stat_data;
+      const currentItem = statData?.物品系统?.背包?.[itemKey];
+      if (!mvuData || !statData || !currentItem || currentItem.类型 !== '消耗品') {
+        return;
+      }
+
+      const parsedQuantity = Math.floor(Number(currentItem.数量 ?? 1));
+      if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+        return;
+      }
+      const currentQuantity = parsedQuantity;
+      const result = applyPermanentConsumableEffect(statData, itemKey, currentItem, 1);
+      if (!result.changed) {
+        return;
+      }
+
+      if (currentQuantity > 1) {
+        currentItem.数量 = currentQuantity - 1;
+      } else {
+        delete statData.物品系统.背包[itemKey];
+      }
+
+      await replaceLatestMvuData(mvuData);
+      if (typeof toastr !== 'undefined') {
+        toastr.success(`${itemKey} 已使用，永久效果：${result.summary}`, '永久属性提升');
+      }
+      window.dispatchEvent(new CustomEvent('mvu-data-updated'));
+    });
+  } catch (error) {
+    console.error('[背包界面] 使用永久消耗品失败:', error);
+    if (typeof toastr !== 'undefined') {
+      toastr.error('使用失败，请重试');
+    }
+  }
 }
 
 // 装备物品
@@ -1404,6 +1468,26 @@ async function unequipItem(slotKey: string) {
     }
   }
 
+  .item-permanent-inline {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 8px 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(52, 211, 153, 0.08);
+    border: 1px solid rgba(52, 211, 153, 0.2);
+    color: #a7f3d0;
+    font-size: 11px;
+    line-height: 1.45;
+
+    i {
+      flex-shrink: 0;
+      margin-top: 1px;
+      color: #34d399;
+    }
+  }
+
   .equip-btn {
     margin-top: 8px;
     padding: 6px 12px;
@@ -1422,6 +1506,36 @@ async function unequipItem(slotKey: string) {
     &:hover {
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+
+    i {
+      font-size: 11px;
+    }
+  }
+
+  .use-consumable-btn {
+    margin-top: 8px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: rgba(52, 211, 153, 0.18);
+    border: 1px solid rgba(52, 211, 153, 0.4);
+    color: #a7f3d0;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+
+    &:hover {
+      transform: translateY(-1px);
+      background: rgba(52, 211, 153, 0.28);
+      box-shadow: 0 4px 12px rgba(52, 211, 153, 0.18);
     }
 
     &:active {

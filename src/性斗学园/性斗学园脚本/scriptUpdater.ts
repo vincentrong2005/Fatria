@@ -1,6 +1,6 @@
 import { compare } from 'compare-versions';
 
-export const SCRIPT_VERSION = '3.6.14';
+export const SCRIPT_VERSION = '3.6.15';
 export const SCRIPT_UPDATE_EVENT = 'fatria-script-update-status';
 
 const JSDELIVR_HOST = 'cdn.jsdelivr.net';
@@ -21,6 +21,13 @@ export interface ScriptUpdateManifest {
   /** Immutable Git tag holding this exact script release, for example `v3.6.0`. */
   releaseTag: string;
   changelog?: string[];
+  releases?: ScriptUpdateRelease[];
+}
+
+export interface ScriptUpdateRelease {
+  version: string;
+  releaseTag?: string;
+  changelog: string[];
 }
 
 export interface ApplyScriptUpdateResult {
@@ -290,11 +297,59 @@ function normalizeManifest(manifest: Partial<ScriptUpdateManifest>): ScriptUpdat
   if (!releaseTag) {
     throw new Error('更新清单缺少 releaseTag。');
   }
+  const currentRelease: ScriptUpdateRelease = {
+    version,
+    releaseTag,
+    changelog: normalizeChangelog(manifest.changelog),
+  };
+  const historicalReleases = Array.isArray(manifest.releases)
+    ? manifest.releases.map(normalizeRelease).filter(isPresent)
+    : [];
+  const releases = [
+    historicalReleases.find(release => release.version === version) ?? currentRelease,
+    ...historicalReleases.filter(release => release.version !== version),
+  ].filter((release, index, entries) => entries.findIndex(item => item.version === release.version) === index);
   return {
     version,
     releaseTag,
-    changelog: Array.isArray(manifest.changelog) ? manifest.changelog.map(safeString).filter(Boolean) : [],
+    changelog: currentRelease.changelog,
+    releases,
   };
+}
+
+function normalizeChangelog(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(safeString).filter(Boolean) : [];
+}
+
+function normalizeRelease(value: unknown): ScriptUpdateRelease | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Partial<ScriptUpdateRelease>;
+  const version = normalizeVersion(candidate.version);
+  if (!version) return null;
+  const releaseTag = normalizeReleaseTag(candidate.releaseTag);
+  return {
+    version,
+    releaseTag: releaseTag || undefined,
+    changelog: normalizeChangelog(candidate.changelog),
+  };
+}
+
+function isPresent<T>(value: T | null): value is T {
+  return value !== null;
+}
+
+export function getScriptUpdateReleases(manifest?: ScriptUpdateManifest): ScriptUpdateRelease[] {
+  if (!manifest) return [];
+  if (manifest.releases && manifest.releases.length > 0) {
+    return manifest.releases.map(release => ({ ...release, changelog: [...release.changelog] }));
+  }
+  return [
+    {
+      version: manifest.version,
+      releaseTag: manifest.releaseTag,
+      changelog: [...(manifest.changelog ?? [])],
+    },
+  ];
 }
 
 function applyCachedUpdateState(cache: ScriptUpdateCache): void {
@@ -491,6 +546,7 @@ function cloneState(state: ScriptUpdateState): ScriptUpdateState {
       ? {
           ...state.manifest,
           changelog: [...(state.manifest.changelog ?? [])],
+          releases: getScriptUpdateReleases(state.manifest),
         }
       : undefined,
   };

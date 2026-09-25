@@ -1,5 +1,6 @@
 import { getActivatedCheatCodes, saveActivatedCheatCodes } from './localPreferences';
 import { getLatestMvuData, updateLatestStatData } from './mvuStore';
+import { MOONCAKE_PERMANENT_EFFECTS, type PermanentConsumableEffect } from './permanentConsumables';
 
 type CheatUpdate = Record<string, any>;
 
@@ -65,6 +66,33 @@ const equippedEquipment = (name: string, options: EquipmentOptions) => ({
     ...options.stats,
   },
 });
+
+const permanentConsumable = (options: { level: string; description: string; effect: PermanentConsumableEffect }) => {
+  const item: Record<string, any> = {
+    类型: '消耗品',
+    等级: options.level,
+    描述: options.description,
+    战斗用品: false,
+    数量: 1,
+  };
+  if (options.effect.永久属性 && Object.keys(options.effect.永久属性).length > 0) {
+    item.永久属性 = { ...options.effect.永久属性 };
+  }
+  if (options.effect.永久加成 && Object.keys(options.effect.永久加成).length > 0) {
+    item.永久加成 = { ...options.effect.永久加成 };
+  }
+  if (options.effect.潜力提升) {
+    item.潜力提升 = options.effect.潜力提升;
+  }
+  return item;
+};
+
+const mooncake = (name: string, level: 'A' | 'S', description: string) =>
+  permanentConsumable({
+    level,
+    description,
+    effect: MOONCAKE_PERMANENT_EFFECTS[name],
+  });
 
 const CHEAT_CODE_UPDATES: Record<string, CheatUpdate> = {
   SNOW: {
@@ -234,6 +262,96 @@ const CHEAT_CODE_UPDATES: Record<string, CheatUpdate> = {
       slot: '饰品',
     }),
   },
+  MIDAUTUMN8888: {
+    '物品系统.背包.五仁月饼': mooncake('五仁月饼', 'A', '坚果与果仁的香气层层叠起，咀嚼后让身体更有进攻节奏。'),
+    '物品系统.背包.红豆沙月饼': mooncake('红豆沙月饼', 'A', '细腻的红豆沙带来安定感，让意志更能抵御快感冲击。'),
+    '物品系统.背包.蛋黄莲蓉月饼': mooncake('蛋黄莲蓉月饼', 'A', '咸甜交织的馅心像月光一样醇厚，举手投足都更有吸引力。'),
+    '物品系统.背包.纯莲蓉月饼': mooncake('纯莲蓉月饼', 'A', '清雅莲香让思绪变得通透，关键时刻更容易抓住机会。'),
+    '物品系统.背包.奶黄流心月饼': mooncake('奶黄流心月饼', 'A', '流心馅料在舌尖爆开，短暂的满足化成持续的进攻底气。'),
+    '物品系统.背包.栗蓉月饼': mooncake('栗蓉月饼', 'A', '栗香温暖厚重，像一层可靠的护甲沉入身体。'),
+    '物品系统.背包.黑芝麻月饼': mooncake('黑芝麻月饼', 'A', '浓郁芝麻香让感官更加锐利，出手时更容易找到破绽。'),
+    '物品系统.背包.紫薯月饼': mooncake('紫薯月饼', 'A', '紫薯的甜香让身法变得轻盈，也带来一点意外的好运。'),
+    '物品系统.背包.椰蓉月饼': mooncake('椰蓉月饼', 'A', '椰香柔软却不失韧性，外表亲和，内里保持着稳定节奏。'),
+    '物品系统.背包.桂花酒酿月饼': mooncake(
+      '桂花酒酿月饼',
+      'A',
+      '桂花与酒酿的微醺香气唤醒潜能，身体仿佛更接近下一次突破。',
+    ),
+    '物品系统.背包.云腿月饼': mooncake('云腿月饼', 'A', '咸香火腿与酥皮的层次感带来扎实的力量和耐受性。'),
+    '物品系统.背包.玫瑰鲜花月饼': mooncake(
+      '玫瑰鲜花月饼',
+      'A',
+      '花瓣香气缠绕在唇齿之间，让气质与临场判断一起变得明亮。',
+    ),
+    '物品系统.背包.冰皮月饼': mooncake('冰皮月饼', 'S', '冰凉柔软的外皮贴合舌尖，清醒的月色让身法与气质同时升华。'),
+    '物品系统.背包.冰淇淋月饼': mooncake(
+      '冰淇淋月饼',
+      'S',
+      '冰淇淋馅料在口中缓慢融化，甜美刺激化作难以忽视的爆发潜能。',
+    ),
+  },
+  MOONRABBITGALA: {
+    '物品系统.背包.月亮玉佩': equipment({
+      level: 'A',
+      description: '玉佩贴在锁骨下方，走动时在胸口轻轻摩擦；月光下，佩戴者的身体曲线格外显眼。',
+      stats: { 魅力加成: 8, 幸运加成: 8 },
+      slot: '饰品',
+    }),
+    '物品系统.背包.玉兔兔女郎服': equipment({
+      level: 'A',
+      description: '兔耳、领结与高开衩剪裁让腰臀几乎无法隐藏，白花花的大腿裸露在外，在战斗中本身就是一种挑衅。',
+      stats: { 魅力加成: 12, 闪避率加成: 8 },
+      slot: '副装备',
+    }),
+    '物品系统.背包.银月按摩棒': equipment({
+      level: 'A',
+      description: '强力版按摩棒，没什么好说的，就是功率大。',
+      stats: { 基础性斗力加成: 18, 暴击率加成: 8, 基础忍耐力加成: -6 },
+      slot: '饰品',
+    }),
+    '物品系统.背包.嫦娥仙子服': equipment({
+      level: 'S',
+      description: '薄纱层层遮掩，却故意露出腰腹和腿根，隐隐能看到乳头；越是被注视，越能维持从容姿态。',
+      stats: { 魅力加成: 18, 幸运加成: 8, 基础忍耐力成算: 8 },
+      slot: '主装备',
+    }),
+    '物品系统.背包.月啸银狼内裤': equipment({
+      level: 'S',
+      description: '银狼纹路贴合臀胯，狼尾装饰在动作中不断摩擦，危险感与淫靡感同时增强。',
+      stats: { 基础性斗力成算: 12, 基础忍耐力成算: 12, 闪避率加成: 5 },
+      slot: '副装备',
+    }),
+    '物品系统.背包.玉兔绒尾': equipment({
+      level: 'A',
+      description: '柔软绒尾固定在后穴，尾根随着扭腰轻颤带动身体反应，越紧张越容易暴露。',
+      stats: { 魅力加成: 10, 闪避率加成: 10, 基础忍耐力成算: -5 },
+      slot: '饰品',
+    }),
+    '物品系统.背包.桂影铃铛项圈': equipment({
+      level: 'A',
+      description: '铃声会暴露呼吸和颤抖，佩戴者很难隐藏自己的状态，适合支配与被支配主题。',
+      stats: { 魅力加成: 8, 幸运加成: 12, 基础忍耐力成算: -4 },
+      slot: '饰品',
+    }),
+    '物品系统.背包.兔耳情趣发箍': equipment({
+      level: 'A',
+      description: '兔耳会随喘息和快感抖动，表情越是失控，外观越能刺激对手。',
+      stats: { 魅力加成: 14, 暴击率加成: 6, 基础忍耐力成算: -5 },
+      slot: '饰品',
+    }),
+    '物品系统.背包.广寒宫锁情腰链': equipment({
+      level: 'S',
+      description: '银链绕过腰腹与胯骨，扣环可以调紧；被逼入近身距离时，束缚感会转化成攻击欲。',
+      stats: { 基础性斗力加成: 15, 基础性斗力成算: 8, 闪避率加成: -8 },
+      slot: '特殊装备',
+    }),
+    '物品系统.背包.月华乳环': equipment({
+      level: 'S',
+      description: '月华材质贴合敏感部位，战斗中的衣料摩擦会持续放大刺激，让每次反击都带着明显欲望。',
+      stats: { 魅力加成: 15, 暴击率加成: 10, 基础性斗力成算: 6, 基础忍耐力成算: -8 },
+      slot: '饰品',
+    }),
+  },
   '0210': {
     '物品系统.背包.作弊者之证': {
       类型: '装备',
@@ -320,6 +438,8 @@ const CHEAT_CODE_MESSAGES: Record<string, string> = {
   PRINCESS: '已获得：蕾丝阳伞',
   DELINQUENT: '已获得：不良少年头巾',
   SHY: '已获得：遮脸刘海',
+  MIDAUTUMN8888: '已获得：14种中秋月饼；校园金币 +8888。月饼可在背包中使用并永久生效。',
+  MOONRABBITGALA: '已获得：中秋月宫情趣装备套装，共10件。',
 };
 
 export function normalizeCheatCode(value: string): string {
@@ -361,9 +481,9 @@ export async function redeemCheatCode(value: string): Promise<CheatCodeResult> {
   if (!mvuData?.stat_data) {
     return { ok: false, code, title: '错误', message: '当前没有可用的 MVU 数据', reason: 'unavailable' };
   }
-  if (code === 'QUEEN') {
+  if (code === 'QUEEN' || code === 'MIDAUTUMN8888') {
     const currentGold = Number(mvuData.stat_data?.物品系统?.学园金币) || 0;
-    updates['物品系统.学园金币'] = currentGold + 2000;
+    updates['物品系统.学园金币'] = currentGold + (code === 'QUEEN' ? 2000 : 8888);
   }
 
   try {

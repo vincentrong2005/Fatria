@@ -971,6 +971,32 @@
                     <div class="settings-helper" :class="{ ready: scriptUpdateHelperReady }">
                       {{ scriptUpdateStatusText }}
                     </div>
+
+                    <details class="settings-changelog">
+                      <summary class="settings-changelog-heading">
+                        <span><i class="fas fa-clock-rotate-left"></i> 更新日志</span>
+                        <small v-if="scriptChangelogEntries.length">{{ scriptChangelogEntries.length }} 个版本</small>
+                      </summary>
+                      <div v-if="scriptChangelogEntries.length > 0" class="settings-changelog-list">
+                        <article
+                          v-for="release in scriptChangelogEntries"
+                          :key="release.version"
+                          class="settings-changelog-release"
+                        >
+                          <div class="settings-changelog-release-heading">
+                            <strong>v{{ release.version }}</strong>
+                            <span v-if="release.version === scriptUpdateState.currentVersion">当前版本</span>
+                          </div>
+                          <ul v-if="release.changelog.length > 0">
+                            <li v-for="(item, index) in release.changelog" :key="`${release.version}-${index}`">
+                              {{ item }}
+                            </li>
+                          </ul>
+                          <p v-else>暂无更新说明</p>
+                        </article>
+                      </div>
+                      <div v-else class="settings-changelog-empty">点击“检查更新”后加载版本更新日志。</div>
+                    </details>
                   </section>
                 </div>
               </div>
@@ -1031,9 +1057,11 @@ import {
 import {
   applyScriptUpdate,
   checkScriptUpdate,
+  getScriptUpdateReleases,
   getScriptUpdateState,
   SCRIPT_UPDATE_EVENT,
   showScriptUpdateGuide,
+  type ScriptUpdateRelease,
   type ScriptUpdateState,
 } from '../scriptUpdater';
 import BackstreetPage from './pages/BackstreetPage.vue';
@@ -1314,6 +1342,9 @@ const scriptUpdateHelperReady = computed(() => scriptUpdateState.value.status ==
 const scriptUpdateStatusText = computed(() => {
   return scriptUpdateState.value.message;
 });
+const scriptChangelogEntries = computed<ScriptUpdateRelease[]>(() =>
+  getScriptUpdateReleases(scriptUpdateState.value.manifest),
+);
 const canResetSelectedSettings = computed(
   () => resetSettingTargets.value.display || resetSettingTargets.value.backstreet || resetSettingTargets.value.image,
 );
@@ -3660,6 +3691,146 @@ onUnmounted(() => {
     color: #237484;
     background: rgba(230, 250, 252, 0.72);
   }
+}
+
+.settings-changelog {
+  margin-top: 14px;
+  border-top: 1px solid rgba(133, 154, 164, 0.16);
+  padding-top: 12px;
+
+  > summary {
+    cursor: pointer;
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &::after {
+      content: '\f078';
+      color: #71838e;
+      font-family: 'Font Awesome 6 Free';
+      font-size: 10px;
+      font-weight: 900;
+      transition: transform 0.16s ease;
+    }
+  }
+
+  &[open] > summary::after {
+    transform: rotate(180deg);
+  }
+}
+
+.settings-changelog-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #2d4857;
+    font-size: 13px;
+    font-weight: 900;
+  }
+
+  i {
+    color: #2ca4b5;
+  }
+
+  small {
+    color: #7c8b95;
+    font-size: 10px;
+    font-weight: 800;
+  }
+}
+
+.settings-changelog-list {
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 2px;
+    background: rgba(73, 125, 138, 0.3);
+  }
+}
+
+.settings-changelog-release {
+  position: relative;
+  margin-left: 5px;
+  border-left: 2px solid rgba(44, 164, 181, 0.24);
+  padding: 0 0 14px 14px;
+
+  &:last-child {
+    padding-bottom: 2px;
+  }
+
+  &::before {
+    position: absolute;
+    top: 2px;
+    left: -5px;
+    width: 8px;
+    height: 8px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: #2ca4b5;
+    box-shadow: 0 0 0 1px rgba(44, 164, 181, 0.35);
+    content: '';
+  }
+}
+
+.settings-changelog-release-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 5px;
+
+  strong {
+    color: #1e7c8b;
+    font-size: 13px;
+    font-weight: 950;
+  }
+
+  span {
+    border-radius: 999px;
+    padding: 2px 6px;
+    color: #237484;
+    background: rgba(230, 250, 252, 0.9);
+    font-size: 10px;
+    font-weight: 800;
+  }
+}
+
+.settings-changelog-release ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 16px;
+  color: #637684;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.settings-changelog-release li::marker {
+  color: #70aab4;
+}
+
+.settings-changelog-release p,
+.settings-changelog-empty {
+  margin: 0;
+  color: #7c8b95;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.45;
 }
 
 .settings-row-icon {
