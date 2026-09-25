@@ -162,19 +162,6 @@
       </div>
     </div>
 
-    <div class="difficulty-card trait-settings-card">
-      <div class="difficulty-header">
-        <i class="fas fa-tags"></i>
-        <span>敌人词条</span>
-      </div>
-      <div class="difficulty-content trait-settings-content">
-        <span class="difficulty-hint-text">高难度战斗会为敌人抽取并保留词条</span>
-        <button class="trait-toggle" :class="{ active: enemyTraitsEnabled }" @click="toggleEnemyTraits">
-          <span>{{ enemyTraitsEnabled ? '已启用' : '已关闭' }}</span>
-        </button>
-      </div>
-    </div>
-
     <!-- 难度确认弹窗 -->
     <div v-if="showConfirmModal" class="confirm-modal-overlay" @click.self="cancelDifficultyChange">
       <div class="confirm-modal">
@@ -210,8 +197,6 @@
 import { computed, ref } from 'vue';
 import { getLatestMvuData, replaceLatestMvuData, runLatestMvuTransaction } from '../../../shared/mvuStore';
 import { getPlayerDerivedStats } from '../../../shared/statSelectors';
-import { isEnemyTraitsEnabled, setEnemyTraitsEnabled } from '../../../shared/combatSettings';
-import { clearEnemyTraitProfiles } from '../../../战斗界面/traitPersistence';
 
 const props = defineProps<{
   characterData: any;
@@ -257,7 +242,6 @@ const currentDifficulty = computed(() => {
 // 弹窗状态
 const showConfirmModal = ref(false);
 const pendingDifficulty = ref<string | null>(null);
-const enemyTraitsEnabled = ref(isEnemyTraitsEnabled());
 
 // 判断某难度是否比当前难度低（无法选择）
 function isDifficultyLower(difficulty: string): boolean {
@@ -315,19 +299,6 @@ async function confirmDifficultyChange() {
 function cancelDifficultyChange() {
   showConfirmModal.value = false;
   pendingDifficulty.value = null;
-}
-
-function toggleEnemyTraits() {
-  const next = !enemyTraitsEnabled.value;
-  if (!setEnemyTraitsEnabled(next)) {
-    toastr.error('词条设置保存失败');
-    return;
-  }
-  enemyTraitsEnabled.value = next;
-  if (!next) {
-    clearEnemyTraitProfiles();
-  }
-  toastr.info(next ? '敌人词条已启用' : '敌人词条已关闭，已有词条将在当前聊天清除');
 }
 
 // 获取难度标签

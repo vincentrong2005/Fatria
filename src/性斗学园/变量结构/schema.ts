@@ -99,6 +99,8 @@ const RelationshipSchema = z
       .prefault(0),
     誓约: z.enum(['无', '支配型', '平等型', '被支配型']).catch('无').prefault('无'),
     关系类型: z.string().prefault('陌生人'),
+    等级: z.coerce.number().int().min(20).max(80).optional(),
+    技能系: z.enum(['手技系', '口技系', '足技系', '胸技系', '骑乘系', '道具系', '精神系']).optional(),
   })
   .prefault({});
 

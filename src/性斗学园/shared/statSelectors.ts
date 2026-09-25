@@ -184,7 +184,7 @@ export function getResolvedEnemyBaseData(statData: any, context: EnemySnapshotCo
 
   const userLevel = readNumber(statData, '角色基础._等级', 1);
   const difficulty = readString(statData, '角色基础.难度', '普通');
-  const npcLevel = Math.max(20, Math.min(100, Math.round(context.npcLevel ?? userLevel + 8)));
+  const npcLevel = Math.max(20, Math.min(80, Math.round(context.npcLevel ?? userLevel + 8)));
   const scaled = databaseData ? applyLevelScaling(baseData, userLevel) : applyLevelScaling(baseData, npcLevel + 8);
   const resolved = applyDifficultyCoefficient(scaled, difficulty);
   return context.traitIds?.length

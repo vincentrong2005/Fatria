@@ -953,7 +953,7 @@ import { getTalentById, type TalentData } from '../性斗学园脚本/data/talen
 import * as TalentSystem from './talentSystem';
 import { getCombatConsumableEffects } from '../shared/combatConsumables';
 import { getEnemySnapshot, getPlayerSnapshot } from '../shared/statSelectors';
-import { isEnemyTraitsEnabled, subscribeEnemyTraitsSetting } from '../shared/combatSettings';
+import { getNpcSkillPools, isEnemyTraitsEnabled, subscribeEnemyTraitsSetting } from '../shared/combatSettings';
 import {
   applyTraitModifiersToEnemyBase,
   createTraitSeededRandom,
@@ -973,9 +973,11 @@ import {
 import {
   assignSkillFamily,
   buildNpcSkillIds,
-  filterNpcSkillIds,
+  filterNpcSkillIdsByFamilies,
+  NPC_SKILL_POOLS,
   NPC_SKILLS,
   SKILL_FAMILY_NAMES,
+  type SkillFamily,
 } from './npcSkillPools';
 import { getNpcBattleProfile, getOrCreateNpcBattleProfile, saveNpcBattleProfile } from './npcPersistence';
 import { tickStatusList, type TimedStatusEffect } from '../shared/statusEngine';
@@ -2123,11 +2125,17 @@ function loadOrCreateEnemyTraits(enemyName: string, difficulty: string): void {
   }
 
   const persisted = getEnemyTraitProfile(enemyTraitKey.value);
-  const traitIds =
-    persisted?.traitIds ?? drawEnemyTraits(difficulty, createTraitSeededRandom(`${enemyTraitKey.value}:${difficulty}`));
+  const drawnTraitIds = drawEnemyTraits(
+    difficulty,
+    createTraitSeededRandom(`${enemyTraitKey.value}:${difficulty}`),
+  );
+  // 旧版本曾将“尚未抽取”保存成空数组。困难及以上难度应至少有一个词条，
+  // 因此把这种空档案视为待迁移，而不是有效的抽取结果。
+  const shouldMigrateEmptyProfile = Boolean(persisted && persisted.traitIds.length === 0 && drawnTraitIds.length > 0);
+  const traitIds = shouldMigrateEmptyProfile ? drawnTraitIds : (persisted?.traitIds ?? drawnTraitIds);
   enemyTraitIds.value = traitIds;
   enemyTraitRuntime.value = getOrCreateEnemyTraitRuntime(enemyTraitKey.value, traitIds);
-  if (!persisted) {
+  if (!persisted || shouldMigrateEmptyProfile) {
     saveEnemyTraitProfile(enemyTraitKey.value, { traitIds });
   }
 }
@@ -2232,20 +2240,173 @@ function getNpcSkillSpecialty(): string | null {
   return family ? SKILL_FAMILY_NAMES[family] || null : null;
 }
 
+function clampNpcLevel(value: unknown, fallback = 20): number {
+  const numeric = Number(value);
+  return Math.max(20, Math.min(80, Math.round(Number.isFinite(numeric) ? numeric : fallback)));
+}
+
+function findNpcRelationship(statData: Record<string, any>, enemyName: string): { key: string; value: any } | null {
+  const relationships = _.get(statData, '关系系统', {}) as Record<string, any>;
+  if (!relationships || typeof relationships !== 'object' || Array.isArray(relationships)) return null;
+  const normalized = normalizeEnemyName(enemyName);
+  const resolved = resolveEnemyName(normalized).replace(/_\d+$/g, '');
+  const entry = Object.entries(relationships).find(([key, value]) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || key === '在场人物') return false;
+    const candidate = resolveEnemyName(normalizeEnemyName(key)).replace(/_\d+$/g, '');
+    return candidate === resolved || candidate === normalized;
+  });
+  return entry ? { key: entry[0], value: entry[1] } : null;
+}
+
+function getSkillFamilyFromDisplayName(value: unknown): SkillFamily | undefined {
+  const rawValue = String(value || '');
+  if (rawValue in SKILL_FAMILY_NAMES) return rawValue as SkillFamily;
+  const entry = Object.entries(SKILL_FAMILY_NAMES).find(([, displayName]) => displayName === rawValue);
+  return entry?.[0] as SkillFamily | undefined;
+}
+
+function hasNpcRelationshipMetadata(relationship: { value: any } | null): boolean {
+  const value = relationship?.value;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  // NPC 的等级和技能系由战斗系统写入关系系统；这两个字段也是旧档识别
+  // 非角色库 NPC 的可靠标记，即使 NPC 名称后来被角色库别名解析覆盖。
+  return value.等级 !== undefined || value.技能系 !== undefined;
+}
+
+function getNpcProfileKey(enemyName: string): string {
+  return `npc:${normalizeEnemyName(enemyName)}`;
+}
+
+/**
+ * 角色库查询支持“包含匹配”，这对剧情中的角色简称很方便，但不能用于判定
+ * NPC 身份：例如“某某模仿薇丝佩菈的路人”会被误认为角色库角色。
+ * NPC 判定只接受角色库的精确名称或精确别名。
+ */
+function hasExactCharacterDatabaseData(enemyName: string): boolean {
+  const normalized = normalizeEnemyName(enemyName);
+  return Object.prototype.hasOwnProperty.call(ENEMY_DATABASE, normalized) ||
+    Object.prototype.hasOwnProperty.call(NAME_ALIASES, normalized);
+}
+
+function isNpcBattleContext(data: any = currentCombatStatData): boolean {
+  if (exorcismBossDefinition.value || BossSystem.bossState.isBossFight) return false;
+  const rawName = String(_.get(data, '性斗系统.对手名称', enemy.value.name) || enemy.value.name || '');
+  const normalizedName = normalizeEnemyName(rawName);
+  const relationship = findNpcRelationship(data || {}, normalizedName);
+  return Boolean(
+    npcBattleProfile.value ||
+      hasNpcRelationshipMetadata(relationship) ||
+      !hasExactCharacterDatabaseData(normalizedName),
+  );
+}
+
+let lastNpcRuntimeSkillPoolKey = '';
+
+/**
+ * 技能预告和敌方行动共用同一份 enemy.skills。旧档或阶段逻辑如果曾把角色库技能
+ * 写进来，仅在加载时过滤一次仍可能留下污染，因此在每次生成预告前做最终校验。
+ */
+function enforceNpcRuntimeSkillPool(): void {
+  if (!isNpcBattleContext() || !enemySkillDbModule) return;
+
+  const allowedFamilies = getNpcSkillPools();
+  const rawName = String(_.get(currentCombatStatData, '性斗系统.对手名称', enemy.value.name) || enemy.value.name || '');
+  const profileKey = getNpcProfileKey(rawName);
+  const profile = npcBattleProfile.value ?? getNpcBattleProfile(profileKey);
+  const family =
+    (profile?.family && allowedFamilies.includes(profile.family) ? profile.family : undefined) ??
+    assignSkillFamily(profileKey, allowedFamilies);
+  const allowedIds = new Set(NPC_SKILL_POOLS[family] ?? []);
+  const currentIds = enemy.value.skills.map(skill => skill.id);
+  const alreadyValid = currentIds.length > 0 && currentIds.every(id => allowedIds.has(id) && Boolean(NPC_SKILLS[id]));
+  if (alreadyValid) return;
+
+  const storedIds = filterNpcSkillIdsByFamilies(profile?.skillIds, [family], NPC_SKILLS);
+  const skillIds = storedIds.length > 0 ? storedIds : buildNpcSkillIds(NPC_SKILLS, profileKey, [family]);
+  const skillDataList = skillIds.map(id => NPC_SKILLS[id]).filter(Boolean);
+  if (skillDataList.length === 0) return;
+
+  const skillRuntime = buildPhaseSkillRuntime(skillDataList, enemySkillDbModule.convertToMvuSkillFormat);
+  enemy.value.skills = skillRuntime.skills;
+  enemyRuntimeSkillCooldowns.value = skillRuntime.cooldowns;
+  enemyRuntimeSkillEffects.value = skillRuntime.effects;
+  const poolKey = `${profileKey}:${family}:${skillIds.join(',')}`;
+  if (poolKey !== lastNpcRuntimeSkillPoolKey) {
+    lastNpcRuntimeSkillPoolKey = poolKey;
+    console.info('[战斗界面] 已在运行态重新应用 NPC 技能池:', {
+      enemyName: rawName,
+      allowedFamilies,
+      family,
+      skillIds,
+    });
+  }
+}
+
+async function persistNpcRelationship(enemyName: string, profile: { level: number; family?: SkillFamily }) {
+  const updated = await updateCombatStatData(statData => {
+    const rawRelationships = _.get(statData, '关系系统', {});
+    const relationships =
+      rawRelationships && typeof rawRelationships === 'object' && !Array.isArray(rawRelationships)
+        ? (rawRelationships as Record<string, any>)
+        : {};
+    const existing = findNpcRelationship(statData, enemyName);
+    const key = existing?.key || normalizeEnemyName(enemyName);
+    relationships[key] = {
+      好感度: 0,
+      支配度: 0,
+      誓约: '无',
+      关系类型: '陌生人',
+      ...(existing?.value && typeof existing.value === 'object' ? existing.value : {}),
+      等级: profile.level,
+      ...(profile.family ? { 技能系: SKILL_FAMILY_NAMES[profile.family] } : {}),
+    };
+    _.set(statData, '关系系统', relationships);
+  });
+  if (updated) {
+    currentCombatStatData = updated;
+  }
+}
+
 async function loadEnemyRuntimeSkills(enemyName: string, data: any) {
   const { enemySkillDbModule } = await loadDatabaseModules();
   const skillLookupName = getEnemySkillLookupName(enemyName, data);
   const dedicatedSkills = enemySkillDbModule.getEnemySkills(enemyName, skillLookupName) || [];
   let fallbackSkills: any[] = [];
-  const isNpcBattle = isNonCharacterNpcBattle();
+  const rawCombatEnemyName = String(_.get(data, '性斗系统.对手名称', enemyName) || enemyName);
+  const normalizedCombatEnemyName = normalizeEnemyName(rawCombatEnemyName);
+  const relationship = findNpcRelationship(data, normalizedCombatEnemyName);
+  const profileKey = getNpcProfileKey(normalizedCombatEnemyName);
+  const persistedNpcProfile = getNpcBattleProfile(profileKey);
+  const isNpcBattle =
+    !exorcismBossDefinition.value &&
+    !BossSystem.bossState.isBossFight &&
+    (isNonCharacterNpcBattle() ||
+      Boolean(persistedNpcProfile) ||
+      hasNpcRelationshipMetadata(relationship) ||
+      !hasExactCharacterDatabaseData(normalizedCombatEnemyName));
   if (isNpcBattle) {
-    const profileKey = `npc:${normalizeEnemyName(enemyName)}`;
-    const profile = getNpcBattleProfile(profileKey) ?? npcBattleProfile.value!;
+    // loadEnemyRuntimeSkills 可能接收到角色库技能池别名，而不是原始对手名。
+    // NPC 判定已经基于性斗系统原始名称完成，因此这里始终只从 NPC 专属池取技能。
+    const profile = persistedNpcProfile ?? npcBattleProfile.value ?? getOrCreateNpcBattleProfile(profileKey, 20, []);
     const allNpcSkills = NPC_SKILLS;
-    const storedSkillIds = filterNpcSkillIds(profile.skillIds, allNpcSkills);
-    const skillIds = storedSkillIds.length > 0 ? storedSkillIds : buildNpcSkillIds(allNpcSkills, profileKey);
-    npcBattleProfile.value = { ...profile, skillIds, family: profile.family ?? assignSkillFamily(profileKey) };
+    const allowedFamilies = getNpcSkillPools();
+    const family =
+      (profile.family && allowedFamilies.includes(profile.family) ? profile.family : undefined) ??
+      assignSkillFamily(profileKey, allowedFamilies);
+    const storedSkillIds = filterNpcSkillIdsByFamilies(profile.skillIds, [family], allNpcSkills);
+    const skillIds = storedSkillIds.length > 0 ? storedSkillIds : buildNpcSkillIds(allNpcSkills, profileKey, [family]);
+    npcBattleProfile.value = {
+      ...profile,
+      skillIds,
+      family,
+    };
     saveNpcBattleProfile(profileKey, npcBattleProfile.value);
+    console.info('[战斗界面] NPC 技能池已应用:', {
+      enemyName,
+      allowedFamilies,
+      family,
+      skillIds,
+    });
     fallbackSkills = skillIds.map((id: string) => allNpcSkills[id]).filter(Boolean);
   } else if (dedicatedSkills.length === 0 && typeof enemySkillDbModule.getFallbackEnemySkills === 'function') {
     fallbackSkills = enemySkillDbModule.getFallbackEnemySkills(enemyName);
@@ -2300,25 +2461,52 @@ async function loadEnemyRuntimeData(data: any, maxClimaxCount: number) {
   const rawName = String(_.get(data, '性斗系统.对手名称', '风纪委员长') || '风纪委员长');
   const normalizedName = normalizeEnemyName(rawName);
   const difficulty = String(_.get(data, '角色基础.难度', '普通') || '普通');
+  currentCombatStatData = data;
   if (!isEnemyTraitsEnabled()) {
     clearEnemyTraitProfiles();
     clearRuntimeEnemyTraits();
   } else {
     loadOrCreateEnemyTraits(normalizedName, difficulty);
   }
-  if (!getEnemyBaseDataByName(normalizedName)) {
+  const profileKey = getNpcProfileKey(normalizedName);
+  const existingProfile = getNpcBattleProfile(profileKey);
+  const relationship = findNpcRelationship(data, normalizedName);
+  const hasNpcMarker = hasNpcRelationshipMetadata(relationship);
+  const hasCharacterDatabaseData = hasExactCharacterDatabaseData(normalizedName);
+  // 已保存的 NPC 档案或关系系统元数据优先于名称解析结果。旧档中某些
+  // NPC 名称会被角色库的模糊别名匹配到，导致错误加载角色库技能。
+  const isNpcBattle = Boolean(existingProfile || hasNpcMarker || !hasCharacterDatabaseData);
+  if (isNpcBattle) {
+    const relationshipLevel = relationship?.value?.等级;
+    const relationshipFamily = getSkillFamilyFromDisplayName(relationship?.value?.技能系);
+    const allowedFamilies = getNpcSkillPools();
     const requestedLevel = Number(_.get(data, '角色基础._等级', 1)) || 1;
-    const generatedLevel = Math.max(20, Math.min(100, Math.round(requestedLevel + Math.floor(Math.random() * 17) - 6)));
-    npcBattleProfile.value = getOrCreateNpcBattleProfile(`npc:${normalizedName}`, generatedLevel, []);
+    const generatedLevel = clampNpcLevel(requestedLevel + Math.floor(Math.random() * 17) - 6);
+    const profile = getOrCreateNpcBattleProfile(
+      profileKey,
+      clampNpcLevel(relationshipLevel ?? existingProfile?.level ?? generatedLevel),
+      [],
+    );
+    const family =
+      (relationshipFamily && allowedFamilies.includes(relationshipFamily) ? relationshipFamily : undefined) ??
+      (profile.family && allowedFamilies.includes(profile.family) ? profile.family : undefined) ??
+      assignSkillFamily(profileKey, allowedFamilies);
+    npcBattleProfile.value = {
+      ...profile,
+      level: clampNpcLevel(relationshipLevel ?? profile.level),
+      family,
+    };
+    saveNpcBattleProfile(profileKey, npcBattleProfile.value);
+    await persistNpcRelationship(normalizedName, npcBattleProfile.value);
   } else {
     npcBattleProfile.value = null;
   }
   initializeTraitRuntimeRules();
   ensureBossBattleRecords();
-  currentCombatStatData = data;
   enemyRuntimeStatuses.value = {};
   enemyRuntimeSkillCooldowns.value = {};
   enemyRuntimeSkillEffects.value = {};
+  lastNpcRuntimeSkillPoolKey = '';
   isBossItemsDisabled.value = false;
   isBossSurrenderDisabled.value = false;
   yamadaHanakoEscapeDraw.value = false;
@@ -5845,6 +6033,7 @@ function syncEnemySkillCooldownsFromRuntime() {
 }
 
 function determineEnemyIntention() {
+  enforceNpcRuntimeSkillPool();
   // 预告生成前，确保技能卡片读取最新的运行态冷却。
   syncEnemySkillCooldownsFromRuntime();
 

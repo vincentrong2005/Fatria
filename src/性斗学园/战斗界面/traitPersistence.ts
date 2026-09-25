@@ -11,7 +11,7 @@ type TraitMap = Record<string, PersistedEnemyTraitProfile>;
 
 function readChatVariables(): Record<string, any> {
   try {
-    const api = window as any;
+    const api = (window as any).TavernHelper ?? (window as any);
     return typeof api.getVariables === 'function' ? api.getVariables({ type: 'chat' }) || {} : {};
   } catch (error) {
     console.warn('[敌人词条] 读取持久化数据失败', error);
@@ -26,7 +26,7 @@ function readMap(): TraitMap {
 
 function writeMap(map: TraitMap): boolean {
   try {
-    const api = window as any;
+    const api = (window as any).TavernHelper ?? (window as any);
     if (typeof api.insertOrAssignVariables !== 'function') return false;
     api.insertOrAssignVariables({ [CHAT_ENEMY_TRAITS_KEY]: map }, { type: 'chat' });
     return true;
@@ -59,7 +59,9 @@ export function getOrCreateEnemyTraitRuntime(enemyKey: string, traitIds: string[
   const profile = getEnemyTraitProfile(enemyKey);
   // 词条 ID 跨遭遇持久化；运行态（封印技能、首次高潮等）只属于当前战斗。
   // 阶段切换沿用同一个 Vue runtime，因此不会重置这些一次性状态。
-  return createTraitRuntimeState(profile?.traitIds ?? traitIds);
+  // 旧版本可能留下 traitIds: []，此时应使用本次迁移后传入的抽取结果。
+  const effectiveTraitIds = profile?.traitIds.length ? profile.traitIds : traitIds;
+  return createTraitRuntimeState(effectiveTraitIds);
 }
 
 export function saveEnemyTraitRuntime(enemyKey: string, state: EnemyTraitRuntimeState): boolean {

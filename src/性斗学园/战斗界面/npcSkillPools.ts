@@ -14,6 +14,8 @@ export const SKILL_FAMILY_NAMES: Record<SkillFamily, string> = {
   mental: '精神系',
 };
 
+export const NPC_SKILL_FAMILY_ORDER: SkillFamily[] = ['hand', 'oral', 'foot', 'chest', 'ride', 'tool', 'mental'];
+
 type NpcSkillSpec = {
   id: string;
   name: string;
@@ -830,6 +832,16 @@ export const NPC_SKILL_POOLS: Record<SkillFamily, string[]> = Object.fromEntries
   (Object.keys(NPC_SKILL_SPECS) as SkillFamily[]).map(family => [family, NPC_SKILL_SPECS[family].map(spec => spec.id)]),
 ) as Record<SkillFamily, string[]>;
 
+/** 只保留属于指定技能系的 NPC 技能，避免旧档技能污染当前技能池。 */
+export function filterNpcSkillIdsByFamilies(
+  skillIds: unknown,
+  families: readonly SkillFamily[],
+  allSkills: Record<string, SkillData> = NPC_SKILLS,
+): string[] {
+  const allowedIds = new Set(families.flatMap(family => NPC_SKILL_POOLS[family] ?? []));
+  return filterNpcSkillIds(skillIds, allSkills).filter(id => allowedIds.has(id));
+}
+
 function hashSeed(value: string): number {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index++) hash = Math.imul(hash ^ value.charCodeAt(index), 16777619);
@@ -862,9 +874,10 @@ function weightedPick<T extends { rarity?: string }>(pool: T[], random: () => nu
   return eligible[eligible.length - 1];
 }
 
-export function assignSkillFamily(enemyId: string): SkillFamily {
+export function assignSkillFamily(enemyId: string, allowedFamilies?: readonly SkillFamily[]): SkillFamily {
   const random = seededRandom(`family:${enemyId}`);
-  const families = Object.keys(NPC_SKILL_POOLS) as SkillFamily[];
+  const filteredFamilies = allowedFamilies?.filter(family => NPC_SKILL_POOLS[family]?.length);
+  const families = filteredFamilies && filteredFamilies.length > 0 ? filteredFamilies : NPC_SKILL_FAMILY_ORDER;
   return families[Math.floor(random() * families.length)] ?? 'hand';
 }
 
@@ -886,6 +899,10 @@ export function drawNpcProfessionalSkillIds(
   return selected.map(skill => skill.id);
 }
 
-export function buildNpcSkillIds(allSkills: Record<string, SkillData>, seedKey: string): string[] {
-  return drawNpcProfessionalSkillIds(allSkills, seedKey, assignSkillFamily(seedKey));
+export function buildNpcSkillIds(
+  allSkills: Record<string, SkillData>,
+  seedKey: string,
+  allowedFamilies?: readonly SkillFamily[],
+): string[] {
+  return drawNpcProfessionalSkillIds(allSkills, seedKey, assignSkillFamily(seedKey, allowedFamilies));
 }

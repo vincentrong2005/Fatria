@@ -135,6 +135,84 @@
                 <CGPage v-if="currentPage === 'cg'" :character-data="characterData" />
 
                 <div v-if="currentPage === 'settings'" class="settings-page">
+                  <header class="settings-page-intro">
+                    <div class="settings-intro-mark" aria-hidden="true">
+                      <i class="fas fa-sliders"></i>
+                    </div>
+                    <div class="settings-intro-copy">
+                      <span class="settings-intro-eyebrow">FATRIA / CONTROL ROOM</span>
+                      <h1>设置中心</h1>
+                      <p>调整手机界面、战斗规则与后街服务</p>
+                    </div>
+                    <span class="settings-sync-state"><i class="fas fa-circle"></i> 已同步</span>
+                  </header>
+
+                  <div class="settings-quick-grid" aria-label="当前设置摘要">
+                    <div class="settings-quick-stat">
+                      <span class="settings-quick-icon quick-icon-combat"><i class="fas fa-shield-halved"></i></span>
+                      <span><strong>{{ enemyTraitsEnabled ? '词条开启' : '词条关闭' }}</strong><small>敌人规则</small></span>
+                    </div>
+                    <div class="settings-quick-stat">
+                      <span class="settings-quick-icon quick-icon-pools"><i class="fas fa-layer-group"></i></span>
+                      <span><strong>{{ npcSkillPools.length }} 个技能池</strong><small>NPC 抽取范围</small></span>
+                    </div>
+                    <div class="settings-quick-stat">
+                      <span class="settings-quick-icon quick-icon-theme"><i class="fas fa-palette"></i></span>
+                      <span><strong>{{ currentThemeLabel }}</strong><small>当前主题</small></span>
+                    </div>
+                  </div>
+
+                  <details class="settings-category-panel combat-settings-panel" open>
+                    <summary class="settings-category-heading">
+                      <span class="settings-category-title"><i class="fas fa-crosshairs"></i>战斗设置</span>
+                      <small class="settings-category-badge">词条 · NPC</small>
+                    </summary>
+
+                    <section class="settings-section settings-section-compact combat-feature-card">
+                      <div class="combat-feature-copy">
+                        <span class="combat-feature-icon trait-icon"><i class="fas fa-tags"></i></span>
+                        <span class="combat-feature-text">
+                          <strong>敌人词条</strong>
+                          <small>关闭后会清除当前聊天中已有的敌人词条</small>
+                        </span>
+                        <label class="combat-switch" title="切换敌人词条">
+                          <input
+                            type="checkbox"
+                            :checked="enemyTraitsEnabled"
+                            @change="toggleEnemyTraitsSetting"
+                          />
+                          <span class="combat-switch-track"><span class="combat-switch-thumb"></span></span>
+                        </label>
+                      </div>
+                    </section>
+
+                    <section class="settings-section settings-section-compact combat-pool-card">
+                      <div class="settings-section-title">
+                        <span><i class="fas fa-layer-group"></i>NPC 技能池</span>
+                        <small>限制非角色库 NPC 的技能系</small>
+                      </div>
+                      <div class="npc-skill-pool-grid">
+                        <label
+                          v-for="family in npcSkillFamilyOptions"
+                          :key="family"
+                          class="npc-skill-pool-option"
+                          :class="[`pool-${family}`, { selected: npcSkillPools.includes(family) }]"
+                        >
+                          <input
+                            class="skill-pool-checkbox"
+                            type="checkbox"
+                            :checked="npcSkillPools.includes(family)"
+                            @change="toggleNpcSkillPool(family)"
+                          />
+                          <span class="npc-skill-pool-mark"><i :class="SKILL_FAMILY_ICONS[family]"></i></span>
+                          <span class="npc-skill-pool-name">{{ SKILL_FAMILY_NAMES[family] }}</span>
+                          <span class="npc-skill-pool-check"><i class="fas fa-check"></i></span>
+                        </label>
+                      </div>
+                      <p class="settings-help-text"><i class="fas fa-circle-info"></i> 至少保留一个技能池</p>
+                    </section>
+                  </details>
+
                   <details class="settings-category-panel" open>
                     <summary class="settings-category-heading">
                       <span>界面显示</span>
@@ -1025,6 +1103,17 @@ import {
 import { getLatestMvuData } from '../../shared/mvuStore';
 import { redeemCheatCode } from '../../shared/cheatCodes';
 import {
+  ALL_NPC_SKILL_FAMILIES,
+  getNpcSkillPools,
+  isEnemyTraitsEnabled,
+  setEnemyTraitsEnabled,
+  setNpcSkillPools,
+  subscribeEnemyTraitsSetting,
+  subscribeNpcSkillPoolsSetting,
+} from '../../shared/combatSettings';
+import { clearEnemyTraitProfiles } from '../../战斗界面/traitPersistence';
+import { SKILL_FAMILY_NAMES, type SkillFamily } from '../../战斗界面/npcSkillPools';
+import {
   DEFAULT_SECONDARY_PHONE_API_SETTINGS,
   fetchSecondaryPhoneApiModels,
   loadSecondaryPhoneApiSettings,
@@ -1267,6 +1356,20 @@ const phoneDragHandleRef = ref<HTMLElement | null>(null);
 const phonePosition = ref<PhonePosition>(loadPhonePosition());
 const isPhoneDragging = ref(false);
 const phonePrefs = ref<PhonePreferences>(loadPhonePreferences());
+const enemyTraitsEnabled = ref(isEnemyTraitsEnabled());
+const npcSkillPools = ref<SkillFamily[]>(getNpcSkillPools());
+const npcSkillFamilyOptions = ALL_NPC_SKILL_FAMILIES;
+const SKILL_FAMILY_ICONS: Record<SkillFamily, string> = {
+  hand: 'fas fa-hand',
+  oral: 'fas fa-comment-dots',
+  foot: 'fas fa-shoe-prints',
+  chest: 'fas fa-heart',
+  ride: 'fas fa-horse',
+  tool: 'fas fa-wand-magic-sparkles',
+  mental: 'fas fa-brain',
+};
+let unsubscribeEnemyTraitsSetting: (() => void) | null = null;
+let unsubscribeNpcSkillPoolsSetting: (() => void) | null = null;
 const resolvedWallpaperUrl = ref('');
 const secondaryPhoneApi = ref<SecondaryPhoneApiSettings>(loadSecondaryPhoneApiSettings());
 const secondaryApiModelOptions = ref<string[]>([...secondaryPhoneApi.value.models]);
@@ -1295,6 +1398,9 @@ const homeApps = computed(() => phoneApps.filter(app => !app.dock));
 const dockApps = computed(() => phoneApps.filter(app => app.dock));
 const currentApp = computed(() => phoneApps.find(app => app.page === currentPage.value));
 const currentPageTitle = computed(() => currentApp.value?.label || '性斗学园');
+const currentThemeLabel = computed(
+  () => PHONE_THEME_OPTIONS.find(theme => theme.value === phonePrefs.value.theme)?.label || '湖蓝',
+);
 const customWallpaperSrc = computed(() => resolvedWallpaperUrl.value);
 const phoneFrameClasses = computed(() => [
   `theme-${phonePrefs.value.theme}`,
@@ -1414,6 +1520,34 @@ function persistSecondaryApiSettings(settings: SecondaryPhoneApiSettings = secon
 
 function setPage(page: PageKey) {
   currentPage.value = page;
+}
+
+function toggleEnemyTraitsSetting() {
+  const next = !enemyTraitsEnabled.value;
+  if (!setEnemyTraitsEnabled(next)) {
+    toastr.error('词条设置保存失败');
+    return;
+  }
+  enemyTraitsEnabled.value = next;
+  if (!next) {
+    clearEnemyTraitProfiles();
+  }
+  toastr.info(next ? '敌人词条已启用' : '敌人词条已关闭，已有词条已清除');
+}
+
+function toggleNpcSkillPool(family: SkillFamily) {
+  const next = npcSkillPools.value.includes(family)
+    ? npcSkillPools.value.filter(item => item !== family)
+    : [...npcSkillPools.value, family];
+  if (next.length === 0) {
+    toastr.warning('至少保留一个 NPC 技能池');
+    return;
+  }
+  if (!setNpcSkillPools(next)) {
+    toastr.error('NPC 技能池设置保存失败');
+    return;
+  }
+  npcSkillPools.value = next;
 }
 
 async function redeemPhoneCheatCode() {
@@ -2166,6 +2300,12 @@ function handleScriptUpdateStatus(event: Event) {
 }
 
 onMounted(() => {
+  unsubscribeEnemyTraitsSetting = subscribeEnemyTraitsSetting(enabled => {
+    enemyTraitsEnabled.value = enabled;
+  });
+  unsubscribeNpcSkillPoolsSetting = subscribeNpcSkillPoolsSetting(families => {
+    npcSkillPools.value = families;
+  });
   window.requestAnimationFrame(() => applyPhonePosition(phonePosition.value));
   getPhoneHostWindow().addEventListener('resize', handlePhoneViewportResize);
 
@@ -2195,6 +2335,10 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  unsubscribeEnemyTraitsSetting?.();
+  unsubscribeEnemyTraitsSetting = null;
+  unsubscribeNpcSkillPoolsSetting?.();
+  unsubscribeNpcSkillPoolsSetting = null;
   revokeIndexedImageObjectUrl(resolvedWallpaperUrl.value);
   getPhoneHostWindow().removeEventListener('resize', handlePhoneViewportResize);
   removePhonePointerListeners();
@@ -2972,23 +3116,201 @@ onUnmounted(() => {
 
 .settings-page {
   min-height: 100%;
-  padding: 14px 14px 30px;
+  padding: 16px 14px 34px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   color: #21313b;
   background:
-    radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.86), transparent 24%),
-    linear-gradient(180deg, rgba(247, 251, 255, 0.96), rgba(226, 239, 245, 0.88));
+    linear-gradient(145deg, rgba(247, 251, 255, 0.98) 0%, rgba(239, 245, 249, 0.94) 48%, rgba(229, 239, 243, 0.94) 100%);
   box-sizing: border-box;
 }
 
+.settings-page-intro {
+  position: relative;
+  min-height: 104px;
+  overflow: hidden;
+  border: 1px solid rgba(47, 101, 127, 0.24);
+  border-radius: 24px;
+  padding: 16px 15px;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  color: #f7fdff;
+  background:
+    linear-gradient(135deg, rgba(22, 61, 79, 0.98), rgba(39, 99, 112, 0.96) 58%, rgba(107, 75, 122, 0.92));
+  box-shadow:
+    0 18px 30px rgba(34, 78, 96, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-sizing: border-box;
+
+  &::after {
+    position: absolute;
+    right: -22px;
+    bottom: -34px;
+    width: 132px;
+    height: 80px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 50%;
+    transform: rotate(-18deg);
+    content: '';
+    pointer-events: none;
+  }
+}
+
+.settings-intro-mark {
+  position: relative;
+  z-index: 1;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  color: #163b4a;
+  background: linear-gradient(145deg, #b8f1e6, #76c5d0);
+  box-shadow:
+    0 10px 18px rgba(4, 27, 38, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+
+  i {
+    font-size: 19px;
+  }
+}
+
+.settings-intro-copy {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+
+  h1 {
+    margin: 2px 0 3px;
+    overflow: hidden;
+    color: #fff;
+    font-size: 21px;
+    font-weight: 950;
+    letter-spacing: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  p {
+    margin: 0;
+    overflow: hidden;
+    color: rgba(239, 252, 255, 0.74);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.settings-intro-eyebrow {
+  color: rgba(190, 244, 238, 0.78);
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+}
+
+.settings-sync-state {
+  position: relative;
+  z-index: 1;
+  align-self: start;
+  border: 1px solid rgba(181, 244, 232, 0.28);
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: #d9fff5;
+  background: rgba(13, 40, 54, 0.26);
+  font-size: 10px;
+  font-weight: 850;
+  white-space: nowrap;
+
+  i {
+    margin-right: 4px;
+    color: #74e5b7;
+    font-size: 7px;
+    vertical-align: 1px;
+  }
+}
+
+.settings-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.settings-quick-stat {
+  min-width: 0;
+  border: 1px solid rgba(125, 151, 163, 0.2);
+  border-radius: 17px;
+  padding: 10px 9px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 9px 18px rgba(41, 78, 91, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  box-sizing: border-box;
+
+  > span:last-child {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  strong {
+    overflow: hidden;
+    color: #263e4b;
+    font-size: 11px;
+    font-weight: 950;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  small {
+    overflow: hidden;
+    color: #748791;
+    font-size: 9px;
+    font-weight: 750;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.settings-quick-icon {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  box-shadow: 0 6px 12px rgba(35, 76, 93, 0.16);
+
+  i {
+    font-size: 12px;
+  }
+}
+
+.quick-icon-combat { background: linear-gradient(145deg, #3eb5b0, #3476b4); }
+.quick-icon-pools { background: linear-gradient(145deg, #8874d8, #5763b5); }
+.quick-icon-theme { background: linear-gradient(145deg, #e18c68, #bc5a75); }
+
 .settings-category-heading {
+  min-height: 38px;
+  border: 1px solid rgba(125, 151, 163, 0.18);
+  border-radius: 15px;
+  padding: 0 11px;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: 0 7px 14px rgba(43, 83, 96, 0.06);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 2px 2px 0;
+  box-sizing: border-box;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
 
   span {
     min-width: 0;
@@ -3002,6 +3324,12 @@ onUnmounted(() => {
     color: #71838e;
     font-size: 11px;
     font-weight: 800;
+  }
+
+  &:hover {
+    border-color: rgba(60, 137, 153, 0.34);
+    background: rgba(255, 255, 255, 0.82);
+    box-shadow: 0 9px 18px rgba(43, 83, 96, 0.09);
   }
 }
 
@@ -3047,6 +3375,15 @@ onUnmounted(() => {
     0 16px 30px rgba(31, 73, 88, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.74);
   backdrop-filter: blur(12px);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+
+  &:focus-within {
+    border-color: rgba(54, 141, 157, 0.36);
+    box-shadow:
+      0 18px 32px rgba(31, 73, 88, 0.14),
+      0 0 0 3px rgba(74, 185, 190, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.74);
+  }
 }
 
 .settings-section-compact {
@@ -3666,6 +4003,240 @@ onUnmounted(() => {
   }
 }
 
+.combat-setting-toggle-row {
+  grid-template-columns: 34px minmax(0, 1fr) 46px;
+}
+
+.combat-settings-panel {
+  gap: 12px;
+
+  > summary.settings-category-heading {
+    min-height: 42px;
+    border: 1px solid rgba(57, 135, 162, 0.24);
+    border-radius: 16px;
+    padding: 0 12px;
+    background: linear-gradient(125deg, rgba(224, 250, 252, 0.92), rgba(239, 235, 255, 0.88));
+    box-shadow: 0 10px 20px rgba(43, 102, 126, 0.1);
+  }
+}
+
+.settings-category-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  i {
+    color: #267f9b;
+    font-size: 14px;
+  }
+}
+
+.settings-category-badge {
+  border: 1px solid rgba(112, 92, 183, 0.18);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #6957a3 !important;
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 10px !important;
+}
+
+.combat-feature-card,
+.combat-pool-card {
+  border-color: rgba(92, 117, 191, 0.2);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(241, 248, 255, 0.9));
+}
+
+.combat-feature-copy {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.combat-feature-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(54, 122, 175, 0.2);
+}
+
+.trait-icon {
+  background: linear-gradient(145deg, #38b4bb, #3d70bb);
+}
+
+.combat-feature-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  strong {
+    color: #253d54;
+    font-size: 14px;
+    font-weight: 950;
+  }
+
+  small {
+    color: #758899;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+}
+
+.combat-switch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  cursor: pointer;
+
+  input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+  }
+}
+
+.combat-switch-track {
+  width: 48px;
+  height: 27px;
+  border: 1px solid rgba(110, 128, 145, 0.26);
+  border-radius: 999px;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  background: #dbe3e9;
+  box-sizing: border-box;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.combat-switch-thumb {
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 5px rgba(39, 61, 77, 0.25);
+  transition: transform 0.18s ease;
+}
+
+.combat-switch input:checked + .combat-switch-track {
+  border-color: rgba(37, 142, 164, 0.64);
+  background: linear-gradient(110deg, #40c2b7, #3f81c5);
+
+  .combat-switch-thumb {
+    transform: translateX(21px);
+  }
+}
+
+.npc-skill-pool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.npc-skill-pool-option {
+  --pool-rgb: 73, 140, 168;
+  position: relative;
+  min-width: 0;
+  min-height: 52px;
+  border: 1px solid rgba(124, 142, 153, 0.2);
+  border-radius: 15px;
+  padding: 8px 9px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #334856;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 5px 12px rgba(69, 93, 112, 0.06);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 850;
+  box-sizing: border-box;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: rgba(var(--pool-rgb), 0.42);
+  }
+
+  &.selected {
+    border-color: rgba(var(--pool-rgb), 0.62);
+    background: rgba(var(--pool-rgb), 0.12);
+    box-shadow: 0 8px 16px rgba(var(--pool-rgb), 0.12);
+  }
+
+  &.pool-hand { --pool-rgb: 38, 162, 181; }
+  &.pool-oral { --pool-rgb: 214, 91, 142; }
+  &.pool-foot { --pool-rgb: 220, 137, 56; }
+  &.pool-chest { --pool-rgb: 194, 76, 126; }
+  &.pool-ride { --pool-rgb: 126, 92, 188; }
+  &.pool-tool { --pool-rgb: 188, 145, 55; }
+  &.pool-mental { --pool-rgb: 72, 104, 184; }
+}
+
+.skill-pool-checkbox {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.npc-skill-pool-mark {
+  width: 29px;
+  height: 29px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: rgba(var(--pool-rgb), 0.95);
+  background: rgba(var(--pool-rgb), 0.13);
+  font-size: 13px;
+}
+
+.npc-skill-pool-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.npc-skill-pool-check {
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  border: 1px solid rgba(var(--pool-rgb), 0.26);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: transparent;
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 9px;
+  transition: color 0.16s ease, background 0.16s ease;
+}
+
+.npc-skill-pool-option.selected .npc-skill-pool-check {
+  border-color: rgba(var(--pool-rgb), 0.66);
+  color: #fff;
+  background: rgba(var(--pool-rgb), 0.9);
+}
+
+.settings-help-text {
+  margin: 10px 0 0;
+  color: #7c8b95;
+  font-size: 10px;
+  font-weight: 700;
+
+  i {
+    color: #6c86a1;
+    margin-right: 2px;
+  }
+}
+
 .settings-toggle {
   justify-self: end;
   width: 46px;
@@ -3977,6 +4548,70 @@ onUnmounted(() => {
   .fatria-phone-app-label {
     width: 68px;
     font-size: 12px;
+  }
+
+  .settings-page {
+    padding: 12px 10px 28px;
+    gap: 12px;
+  }
+
+  .settings-page-intro {
+    min-height: 96px;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    gap: 9px;
+    border-radius: 20px;
+    padding: 13px 12px;
+  }
+
+  .settings-intro-mark {
+    width: 40px;
+    height: 40px;
+    border-radius: 13px;
+  }
+
+  .settings-intro-copy h1 {
+    font-size: 19px;
+  }
+
+  .settings-intro-copy p {
+    font-size: 10px;
+  }
+
+  .settings-sync-state {
+    padding: 4px 7px;
+    font-size: 9px;
+  }
+
+  .settings-quick-grid {
+    gap: 6px;
+  }
+
+  .settings-quick-stat {
+    gap: 6px;
+    padding: 8px 7px;
+  }
+
+  .settings-quick-icon {
+    width: 25px;
+    height: 25px;
+  }
+
+  .settings-quick-stat strong {
+    font-size: 10px;
+  }
+
+  .settings-quick-stat small {
+    font-size: 8px;
+  }
+
+  .settings-category-heading {
+    min-height: 36px;
+    padding: 0 9px;
+  }
+
+  .settings-section {
+    border-radius: 17px;
+    padding: 12px;
   }
 }
 
