@@ -655,7 +655,9 @@
                       </span>
                       <span v-if="skill.cooldown > 0" class="stat-item cooldown">{{ skill.cooldown }}回合</span>
                       <span v-if="skill.sharedCooldownGroup" class="stat-item equipment-free">共享冷却</span>
-                      <span class="stat-item equipment-free">不耗行动</span>
+                      <span class="stat-item equipment-free">
+                        {{ equipmentSkillConsumesTurn(skill) ? '消耗行动' : '不耗行动' }}
+                      </span>
                     </div>
                   </Card>
                 </template>
@@ -935,7 +937,16 @@ import {
   normalizeEnemyName,
   resolveEnemyName,
 } from './enemyDatabase';
-import type { Character, CombatLogEntry, Item, Skill, SkillData, TurnState } from './types';
+import {
+  DamageSource,
+  SkillType,
+  type Character,
+  type CombatLogEntry,
+  type Item,
+  type Skill,
+  type SkillData,
+  type TurnState,
+} from './types';
 import { executeAttack } from './combatCalculator';
 import {
   applyBossMechanicEvaluation,
@@ -1147,7 +1158,7 @@ const equipmentSkillUses = ref<Record<string, number>>({});
 const equipmentSkillCooldowns = ref<Record<string, number>>({});
 const equipmentSkillSharedCooldowns = ref<Record<string, number>>({});
 
-type EquipmentSkillVisualTone = 'bind' | 'chain' | 'rose' | 'crown';
+type EquipmentSkillVisualTone = 'bind' | 'chain' | 'rose' | 'crown' | 'blade' | 'star';
 interface EquipmentSkillVisualState {
   key: number;
   skillName: string;
@@ -4073,6 +4084,10 @@ function isEquipmentSkillDisabled(skill: EquipmentSkillDefinition): boolean {
   );
 }
 
+function equipmentSkillConsumesTurn(skill: EquipmentSkillDefinition): boolean {
+  return skill.id === 'equipment_smiling_blade_strike' || skill.id === 'equipment_undying_star_flare';
+}
+
 function markEquipmentSkillUsed(skill: EquipmentSkillDefinition) {
   equipmentSkillUses.value = {
     ...equipmentSkillUses.value,
@@ -4240,6 +4255,98 @@ async function changePlayerEndurance(delta: number): Promise<{ before: number; a
   return { before, after, actual: after - before };
 }
 
+interface EquipmentAttackResolution {
+  result: ReturnType<typeof executeAttack>;
+  actualDamage: number;
+  logs: EquipmentSkillLog[];
+}
+
+async function executeEquipmentAttack(
+  skillData: SkillData,
+  options: { maximumPleasureFraction?: number } = {},
+): Promise<EquipmentAttackResolution> {
+  const attacker = cloneCharacter(player.value);
+  const target = cloneCharacter(enemy.value);
+  const result = executeAttack(attacker, target, skillData, true);
+  const logs: EquipmentSkillLog[] = result.logs.map(message => ({ message, type: 'info' }));
+
+  if (result.isDodged) {
+    logs.push({ message: `${target.name} 完全闪避了装备技攻击！`, type: 'info' });
+    player.value = attacker;
+    enemy.value = target;
+    return { result, actualDamage: 0, logs };
+  }
+
+  const oldPleasure = target.stats.currentPleasure;
+  const maximumPleasureFraction = options.maximumPleasureFraction;
+  const damageLimit =
+    maximumPleasureFraction === undefined
+      ? Number.POSITIVE_INFINITY
+      : Math.max(1, Math.floor(target.stats.maxPleasure * maximumPleasureFraction));
+  const appliedDamage = Math.min(result.totalDamage, damageLimit);
+  target.stats.currentPleasure = Math.min(target.stats.maxPleasure, oldPleasure + appliedDamage);
+  const actualDamage = target.stats.currentPleasure - oldPleasure;
+
+  logs.push({
+    message: result.isCritical
+      ? `装备技暴击！总计造成 ${actualDamage} 点快感。`
+      : `装备技造成 ${actualDamage} 点快感。`,
+    type: result.isCritical ? 'critical' : 'damage',
+  });
+  if (appliedDamage < result.totalDamage) {
+    logs.push({
+      message: `装备技伤害受到 ${Math.round(maximumPleasureFraction! * 100)}% 快感上限限制。`,
+      type: 'info',
+    });
+  }
+
+  player.value = attacker;
+  enemy.value = target;
+
+  const postDamageLogs = await applyPostDamageSpecialEffects({
+    attackerSide: 'player',
+    targetSide: 'enemy',
+    damage: actualDamage,
+    attacker,
+    target,
+  });
+  logs.push(...postDamageLogs.map(message => ({ message, type: 'info' as const })));
+  return { result, actualDamage, logs };
+}
+
+async function applySmilingBladePassiveAtTurnStart(): Promise<void> {
+  const equipped = equippedEquipmentSkills.value.some(skill => skill.equipmentId === 'smiling_blade');
+  if (!equipped || turnState.currentTurn < 4) {
+    return;
+  }
+
+  const stacks = Math.min(5, turnState.currentTurn - 3);
+  const statusName = '装备被动_笑里藏刀_藏锋';
+  const statusList = await readPlayerTemporaryStatusList();
+  const current = statusList[statusName];
+  const currentBonus = current && typeof current === 'object' ? current.加成 || {} : {};
+  const desiredBonus = {
+    基础性斗力成算: stacks * 8,
+    基础忍耐力成算: stacks * -5,
+    暴击率加成: stacks * 5,
+  };
+
+  if (
+    Number(currentBonus.基础性斗力成算) === desiredBonus.基础性斗力成算 &&
+    Number(currentBonus.基础忍耐力成算) === desiredBonus.基础忍耐力成算 &&
+    Number(currentBonus.暴击率加成) === desiredBonus.暴击率加成
+  ) {
+    return;
+  }
+
+  await applyPlayerEquipmentStatus(statusName, {
+    加成: desiredBonus,
+    剩余回合: 999,
+    描述: `藏锋：第${stacks}层，性斗力成算+${stacks * 8}%、忍耐力成算${stacks * -5}%、暴击率+${stacks * 5}%`,
+  });
+  addLog(`【笑里藏·刀】藏锋叠至 ${stacks}/5 层。`, 'system', 'buff');
+}
+
 async function applyEnemyBindFromEquipment(duration: number, skillName: string): Promise<EquipmentSkillLog[]> {
   const logs: EquipmentSkillLog[] = [];
   if (BossSystem.bossState.isBossFight && BossSystem.bossState.bossId === 'muxinlan') {
@@ -4353,6 +4460,77 @@ async function applyEquipmentSkillEffect(skill: EquippedEquipmentSkill): Promise
   ];
 
   switch (skill.id) {
+    case 'equipment_smiling_blade_strike': {
+      const staminaSpent = player.value.stats.currentEndurance;
+      const maxEndurance = Math.max(1, player.value.stats.maxEndurance);
+      const coefficient = 1 + 3 * Math.min(1, Math.max(0, staminaSpent / maxEndurance));
+      await changePlayerEndurance(-staminaSpent);
+
+      const attack = await executeEquipmentAttack({
+        id: skill.id,
+        name: skill.name,
+        description: skill.description,
+        effectDescription: `消耗全部耐力，造成${Math.round(coefficient * 100)}%性斗力伤害`,
+        icon: 'fas fa-khanda',
+        type: SkillType.ULTIMATE,
+        rarity: 'SS',
+        staminaCost: 0,
+        cooldown: 0,
+        castTime: 0,
+        damageFormula: [{ source: DamageSource.SEX_POWER, coefficient, baseValue: 0 }],
+        accuracy: 100,
+        critModifier: 0,
+        buffs: [],
+        canBeReflected: false,
+        hitCount: 1,
+      });
+      logs.push({ message: `【笑里藏·刀】消耗了 ${staminaSpent} 点耐力。`, type: 'debuff' });
+      logs.push(...attack.logs);
+
+      const pleasureGain = Math.floor(player.value.stats.maxPleasure * 0.1);
+      const pleasureChange = await changePlayerPleasure(pleasureGain);
+      logs.push({ message: `自身快感 +${Math.max(0, pleasureChange.actual)}。`, type: 'debuff' });
+      if (!attack.result.isDodged) {
+        logs.push(...(await applyEnemyBindFromEquipment(1, '笑里藏刀')));
+      }
+      break;
+    }
+
+    case 'equipment_undying_star_flare': {
+      const attack = await executeEquipmentAttack(
+        {
+          id: skill.id,
+          name: skill.name,
+          description: skill.description,
+          effectDescription: '造成300%魅力伤害，最多为目标最大快感的5%',
+          icon: 'fas fa-star',
+          type: SkillType.CHARM,
+          rarity: 'SS',
+          staminaCost: 0,
+          cooldown: 5,
+          castTime: 0,
+          damageFormula: [{ source: DamageSource.CHARM, coefficient: 3, baseValue: 0 }],
+          accuracy: 100,
+          critModifier: 0,
+          buffs: [],
+          canBeReflected: false,
+          hitCount: 1,
+        },
+        { maximumPleasureFraction: 0.05 },
+      );
+      logs.push(...attack.logs);
+
+      const pleasureReduce = Math.floor(player.value.stats.maxPleasure * 0.18);
+      const enduranceGain = Math.ceil(player.value.stats.maxEndurance * 0.2);
+      const pleasureChange = await changePlayerPleasure(-pleasureReduce);
+      const enduranceChange = await changePlayerEndurance(enduranceGain);
+      logs.push({
+        message: `【不陨之星】自身快感 ${pleasureChange.before} → ${pleasureChange.after}，耐力 ${enduranceChange.before} → ${enduranceChange.after}。`,
+        type: 'heal',
+      });
+      break;
+    }
+
     case 'equipment_immobilizing_disc_bind': {
       const duration = enemy.value.stats.evasion > 60 ? 3 : 2;
       await applyEnemyEquipmentStatus('装备技_定身_闪避压制', {
@@ -4567,6 +4745,11 @@ async function handleEquipmentSkill(skill: EquippedEquipmentSkill) {
     return;
   }
 
+  const consumesTurn = equipmentSkillConsumesTurn(skill);
+  if (consumesTurn) {
+    turnState.phase = 'processing';
+  }
+
   try {
     triggerEquipmentSkillVisual(skill);
     const skillLogs = await applyEquipmentSkillEffect(skill);
@@ -4580,9 +4763,19 @@ async function handleEquipmentSkill(skill: EquippedEquipmentSkill) {
     }
 
     activeMenu.value = 'main';
+    if (consumesTurn) {
+      setTimeout(() => {
+        if (!isBattleFlowLocked()) {
+          void handleEnemyTurn();
+        }
+      }, 1000);
+    }
   } catch (error) {
     console.error('[战斗界面] 装备技发动失败', error);
     addLog(`【${skill.name}】发动失败。`, 'system', 'critical');
+    if (consumesTurn && !isBattleFlowLocked()) {
+      turnState.phase = 'playerInput';
+    }
   }
 }
 
@@ -4628,7 +4821,16 @@ async function applyPostDamageSpecialEffects(params: {
   }
 
   const traitDrain = params.attackerSide === 'enemy' && hasTrait(enemyTraitIds.value, 'trait_life_drain') ? 15 : 0;
-  const drainPercent = Math.max(traitDrain, await getSpecialStatusValue(params.attackerSide, '吸取快感'));
+  const equipmentDrain =
+    params.attackerSide === 'player' &&
+    equippedEquipmentSkills.value.some(skill => skill.equipmentId === 'undying_star')
+      ? 15
+      : 0;
+  const drainPercent = Math.max(
+    traitDrain,
+    equipmentDrain,
+    await getSpecialStatusValue(params.attackerSide, '吸取快感'),
+  );
   if (drainPercent > 0) {
     const drained = Math.floor((params.damage * drainPercent) / 100);
     const actualChange = await applyResourceDeltaToCombatant(
@@ -5306,6 +5508,8 @@ function getEquipmentSkillVisualTone(skill: EquippedEquipmentSkill): EquipmentSk
   if (skill.equipmentId === 'immobilizing_disc') return 'bind';
   if (skill.equipmentId === 'god_binding_chain') return 'chain';
   if (skill.equipmentId === 'white_rose_of_atonement') return 'rose';
+  if (skill.equipmentId === 'smiling_blade') return 'blade';
+  if (skill.equipmentId === 'undying_star') return 'star';
   return 'crown';
 }
 
@@ -7417,6 +7621,8 @@ async function startNewTurn() {
   decrementEquipmentSkillCooldowns();
 
   await refreshStatusEffectsAtTurnStart();
+
+  await applySmilingBladePassiveAtTurnStart();
 
   // 束缚回合数现在在专门的endTurn函数中处理
 
@@ -10403,6 +10609,18 @@ function getSinTalentDisplayName(sinType: string): string {
     --skill-primary: #f9a8d4;
     --skill-secondary: #f8fafc;
     --skill-accent: #86efac;
+  }
+
+  &.tone-blade {
+    --skill-primary: #f43f5e;
+    --skill-secondary: #f8fafc;
+    --skill-accent: #f59e0b;
+  }
+
+  &.tone-star {
+    --skill-primary: #38bdf8;
+    --skill-secondary: #fef08a;
+    --skill-accent: #c084fc;
   }
 
   &.tone-crown {

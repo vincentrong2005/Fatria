@@ -1,6 +1,7 @@
 import { getActivatedCheatCodes, saveActivatedCheatCodes } from './localPreferences';
 import { getLatestMvuData, updateLatestStatData } from './mvuStore';
 import { MOONCAKE_PERMANENT_EFFECTS, type PermanentConsumableEffect } from './permanentConsumables';
+import { createLegendaryEquipmentMvuData, LEGENDARY_EQUIPMENTS } from './legendaryEquipment';
 
 type CheatUpdate = Record<string, any>;
 
@@ -95,6 +96,9 @@ const mooncake = (name: string, level: 'A' | 'S', description: string) =>
   });
 
 const CHEAT_CODE_UPDATES: Record<string, CheatUpdate> = {
+  SPONSORSTAR: {
+    '物品系统.背包.不陨之星': createLegendaryEquipmentMvuData(LEGENDARY_EQUIPMENTS.undyingStar),
+  },
   SNOW: {
     '物品系统.背包.纯黑丝绒长围巾': equipment({
       level: 'A',
@@ -417,6 +421,7 @@ const CHEAT_CODE_UPDATES: Record<string, CheatUpdate> = {
 };
 
 const CHEAT_CODE_MESSAGES: Record<string, string> = {
+  SPONSORSTAR: '已获得赞助者专属SSS装备：不陨之星',
   '0210': '',
   '1011': '草莓套装已自动装备到身上！',
   SNOW: '已获得：纯黑丝绒长围巾',
@@ -465,7 +470,7 @@ export async function redeemCheatCode(value: string): Promise<CheatCodeResult> {
       ok: false,
       code,
       title: '警告',
-      message: `作弊码 ${code} 已经激活过了，无法重复使用！`,
+      message: code === 'SPONSORSTAR' ? '这份赞助者谢礼已经领取过了！' : `作弊码 ${code} 已经激活过了，无法重复使用！`,
       reason: 'duplicate',
     };
   }
@@ -493,7 +498,14 @@ export async function redeemCheatCode(value: string): Promise<CheatCodeResult> {
     return {
       ok: true,
       code,
-      title: code === '0210' ? 'CHEAT MODE ACTIVATE' : code === '1011' ? '草莓套装激活' : '作弊码激活',
+      title:
+        code === 'SPONSORSTAR'
+          ? '赞助者谢礼'
+          : code === '0210'
+            ? 'CHEAT MODE ACTIVATE'
+            : code === '1011'
+              ? '草莓套装激活'
+              : '作弊码激活',
       message: CHEAT_CODE_MESSAGES[code] || '',
     };
   } catch (error) {

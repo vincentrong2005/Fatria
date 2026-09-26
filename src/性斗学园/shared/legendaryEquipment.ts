@@ -9,7 +9,7 @@ export interface LegendaryEquipment {
   grade: LegendaryEquipmentGrade;
   slot: LegendaryEquipmentSlot;
   icon: string;
-  source: 'grand_wheel' | 'exorcism' | 'seven_sins';
+  source: 'grand_wheel' | 'exorcism' | 'seven_sins' | 'sponsor';
   attrFocus: string;
   description: string;
   bonuses: Partial<BonusStats>;
@@ -151,6 +151,30 @@ export const LEGENDARY_EQUIPMENTS = {
       '完成驱魔迷宫最终净化后获得的SSS特殊装备。装备技【净心】：清除自身所有debuff，并降低自身20%最大快感。',
     bonuses: { 基础忍耐力加成: 105, 基础忍耐力成算: 24, 魅力加成: 55, 闪避率加成: 28 },
   },
+  smilingBlade: {
+    id: 'smiling_blade',
+    name: '笑里藏·刀',
+    grade: 'SSS',
+    slot: '主装备',
+    icon: 'fas fa-khanda',
+    source: 'grand_wheel',
+    attrFocus: '性斗力',
+    description:
+      '大转盘极低概率产出的SSS主装备。被动【藏锋】：第4回合起每回合叠加一层，性斗力成算+8%、忍耐力成算-5%、暴击率+5%，最多5层。装备技【笑里藏刀】：消耗全部当前耐力造成高额性斗力伤害，增加自身10%最大快感，命中后束缚目标1回合。',
+    bonuses: { 基础性斗力加成: 60, 基础性斗力成算: 18, 暴击率加成: 15 },
+  },
+  undyingStar: {
+    id: 'undying_star',
+    name: '不陨之星',
+    grade: 'SSS',
+    slot: '主装备',
+    icon: 'fas fa-star',
+    source: 'sponsor',
+    attrFocus: '魅力',
+    description:
+      '献给赞助者的SSS主装备。被动【星辉汲取】：造成快感伤害时，按实际伤害的15%降低自身快感。装备技【星火不灭】：造成300%魅力伤害（最多目标最大快感的5%），降低自身18%最大快感并恢复20%最大耐力。',
+    bonuses: { 魅力加成: 120, 基础性斗力加成: 45, 基础忍耐力加成: 40 },
+  },
   crownOfSevenSins: {
     id: 'crown_of_seven_sins',
     name: '七罪王冠',
@@ -178,6 +202,7 @@ export const LEGENDARY_EQUIPMENT_LIST: LegendaryEquipment[] = Object.values(LEGE
 export const GRAND_WHEEL_SSS_EQUIPMENT_ITEMS: LegendaryEquipment[] = [
   LEGENDARY_EQUIPMENTS.immobilizingDisc,
   LEGENDARY_EQUIPMENTS.godBindingChain,
+  LEGENDARY_EQUIPMENTS.smilingBlade,
 ];
 export const EXORCISM_FINAL_REWARD_EQUIPMENT = LEGENDARY_EQUIPMENTS.whiteRoseOfAtonement;
 export const SEVEN_SINS_REWARD_EQUIPMENT = LEGENDARY_EQUIPMENTS.crownOfSevenSins;
@@ -212,6 +237,26 @@ export const EQUIPMENT_SKILLS: EquipmentSkillDefinition[] = [
     description: '清除自身所有debuff，并降低自身20%最大快感。',
     usesPerBattle: 2,
     cooldown: 4,
+  },
+  {
+    id: 'equipment_smiling_blade_strike',
+    equipmentId: LEGENDARY_EQUIPMENTS.smilingBlade.id,
+    equipmentName: LEGENDARY_EQUIPMENTS.smilingBlade.name,
+    name: '笑里藏刀',
+    grade: 'SSS',
+    description: '消耗全部当前耐力，造成高额性斗力伤害；自身快感增加10%最大快感，命中后束缚目标1回合。',
+    usesPerBattle: 1,
+    cooldown: 0,
+  },
+  {
+    id: 'equipment_undying_star_flare',
+    equipmentId: LEGENDARY_EQUIPMENTS.undyingStar.id,
+    equipmentName: LEGENDARY_EQUIPMENTS.undyingStar.name,
+    name: '星火不灭',
+    grade: 'SSS',
+    description: '造成300%魅力伤害，伤害最多为目标最大快感的5%；自身快感-18%最大快感，耐力+20%最大耐力。',
+    usesPerBattle: 2,
+    cooldown: 5,
   },
   {
     id: 'equipment_crown_pride',
