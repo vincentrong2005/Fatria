@@ -157,10 +157,10 @@ export const LEGENDARY_EQUIPMENTS = {
     grade: 'SSS',
     slot: '主装备',
     icon: 'fas fa-khanda',
-    source: 'grand_wheel',
+    source: 'sponsor',
     attrFocus: '性斗力',
     description:
-      '大转盘极低概率产出的SSS主装备。被动【藏锋】：第4回合起每回合叠加一层，性斗力成算+8%、忍耐力成算-5%、暴击率+5%，最多5层。装备技【笑里藏刀】：消耗全部当前耐力造成高额性斗力伤害，增加自身10%最大快感，命中后束缚目标1回合。',
+      '赞助者专属的SSS主装备。被动【藏锋】：第4回合起每回合叠加一层，性斗力成算+8%、忍耐力成算-5%、暴击率+5%，最多5层。装备技【笑里藏刀】：消耗全部当前耐力造成高额性斗力伤害，增加自身10%最大快感，命中后束缚目标1回合。',
     bonuses: { 基础性斗力加成: 60, 基础性斗力成算: 18, 暴击率加成: 15 },
   },
   undyingStar: {
@@ -202,7 +202,6 @@ export const LEGENDARY_EQUIPMENT_LIST: LegendaryEquipment[] = Object.values(LEGE
 export const GRAND_WHEEL_SSS_EQUIPMENT_ITEMS: LegendaryEquipment[] = [
   LEGENDARY_EQUIPMENTS.immobilizingDisc,
   LEGENDARY_EQUIPMENTS.godBindingChain,
-  LEGENDARY_EQUIPMENTS.smilingBlade,
 ];
 export const EXORCISM_FINAL_REWARD_EQUIPMENT = LEGENDARY_EQUIPMENTS.whiteRoseOfAtonement;
 export const SEVEN_SINS_REWARD_EQUIPMENT = LEGENDARY_EQUIPMENTS.crownOfSevenSins;

@@ -96,6 +96,9 @@ const mooncake = (name: string, level: 'A' | 'S', description: string) =>
   });
 
 const CHEAT_CODE_UPDATES: Record<string, CheatUpdate> = {
+  SPONSORBLADE: {
+    '物品系统.背包.笑里藏·刀': createLegendaryEquipmentMvuData(LEGENDARY_EQUIPMENTS.smilingBlade),
+  },
   SPONSORSTAR: {
     '物品系统.背包.不陨之星': createLegendaryEquipmentMvuData(LEGENDARY_EQUIPMENTS.undyingStar),
   },
@@ -421,6 +424,7 @@ const CHEAT_CODE_UPDATES: Record<string, CheatUpdate> = {
 };
 
 const CHEAT_CODE_MESSAGES: Record<string, string> = {
+  SPONSORBLADE: '已获得赞助者专属SSS装备：笑里藏·刀',
   SPONSORSTAR: '已获得赞助者专属SSS装备：不陨之星',
   '0210': '',
   '1011': '草莓套装已自动装备到身上！',
@@ -470,7 +474,10 @@ export async function redeemCheatCode(value: string): Promise<CheatCodeResult> {
       ok: false,
       code,
       title: '警告',
-      message: code === 'SPONSORSTAR' ? '这份赞助者谢礼已经领取过了！' : `作弊码 ${code} 已经激活过了，无法重复使用！`,
+      message:
+        code === 'SPONSORSTAR' || code === 'SPONSORBLADE'
+          ? '这份赞助者谢礼已经领取过了！'
+          : `作弊码 ${code} 已经激活过了，无法重复使用！`,
       reason: 'duplicate',
     };
   }
@@ -499,7 +506,7 @@ export async function redeemCheatCode(value: string): Promise<CheatCodeResult> {
       ok: true,
       code,
       title:
-        code === 'SPONSORSTAR'
+        code === 'SPONSORSTAR' || code === 'SPONSORBLADE'
           ? '赞助者谢礼'
           : code === '0210'
             ? 'CHEAT MODE ACTIVATE'
