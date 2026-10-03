@@ -95,7 +95,32 @@ const mooncake = (name: string, level: 'A' | 'S', description: string) =>
     effect: MOONCAKE_PERMANENT_EFFECTS[name],
   });
 
+const anniversaryCake = (description: string, bonus?: EquipmentOptions['stats'], staminaRestore?: number) => ({
+  类型: '消耗品',
+  等级: 'C',
+  描述: description,
+  战斗用品: true,
+  数量: 2,
+  ...(bonus ? { 加成属性: bonus } : {}),
+  ...(staminaRestore ? { 耐力增加: staminaRestore } : {}),
+});
+
 const CHEAT_CODE_UPDATES: Record<string, CheatUpdate> = {
+  XDO1YEAR: {
+    '物品系统.背包.堕落修女的圣水瓶': createLegendaryEquipmentMvuData(LEGENDARY_EQUIPMENTS.fallenNunHolyWater),
+    '物品系统.背包.草莓奶油小蛋糕': anniversaryCake('魅力+5，持续3回合。', { 魅力加成: 5 }),
+    '物品系统.背包.巧克力脆片小蛋糕': anniversaryCake('基础性斗力+5，持续3回合。', { 基础性斗力加成: 5 }),
+    '物品系统.背包.蓝莓酸奶小蛋糕': anniversaryCake('基础忍耐力+5，持续3回合。', { 基础忍耐力加成: 5 }),
+    '物品系统.背包.柠檬糖霜小蛋糕': anniversaryCake('闪避率+3，持续3回合。', { 闪避率加成: 3 }),
+    '物品系统.背包.樱桃夹心小蛋糕': anniversaryCake('暴击率+3，持续3回合。', { 暴击率加成: 3 }),
+    '物品系统.背包.抹茶红豆小蛋糕': anniversaryCake('战斗中恢复8点耐力。', undefined, 8),
+    '物品系统.背包.幸运抽奖券': {
+      类型: '其他',
+      等级: 'A',
+      描述: '可用于商店大转盘抽奖',
+      数量: 3,
+    },
+  },
   SPONSORBLADE: {
     '物品系统.背包.笑里藏·刀': createLegendaryEquipmentMvuData(LEGENDARY_EQUIPMENTS.smilingBlade),
   },
@@ -424,6 +449,7 @@ const CHEAT_CODE_UPDATES: Record<string, CheatUpdate> = {
 };
 
 const CHEAT_CODE_MESSAGES: Record<string, string> = {
+  XDO1YEAR: '已获得：堕落修女的圣水瓶、六种战斗小蛋糕各2个、学园金币 +8888、幸运抽奖券 +3。',
   SPONSORBLADE: '已获得赞助者专属SSS装备：笑里藏·刀',
   SPONSORSTAR: '已获得赞助者专属SSS装备：不陨之星',
   '0210': '',
@@ -493,9 +519,20 @@ export async function redeemCheatCode(value: string): Promise<CheatCodeResult> {
   if (!mvuData?.stat_data) {
     return { ok: false, code, title: '错误', message: '当前没有可用的 MVU 数据', reason: 'unavailable' };
   }
-  if (code === 'QUEEN' || code === 'MIDAUTUMN8888') {
+  if (code === 'QUEEN' || code === 'MIDAUTUMN8888' || code === 'XDO1YEAR') {
     const currentGold = Number(mvuData.stat_data?.物品系统?.学园金币) || 0;
     updates['物品系统.学园金币'] = currentGold + (code === 'QUEEN' ? 2000 : 8888);
+  }
+  if (code === 'XDO1YEAR') {
+    const backpack = mvuData.stat_data?.物品系统?.背包 || {};
+    for (const [path, item] of Object.entries(updates)) {
+      if (!path.startsWith('物品系统.背包.')) continue;
+      const name = path.slice('物品系统.背包.'.length);
+      const existing = backpack[name];
+      if (existing?.类型 === (item as any).类型) {
+        updates[path] = { ...(item as object), 数量: (Number(existing.数量) || 0) + Number((item as any).数量) };
+      }
+    }
   }
 
   try {

@@ -658,6 +658,7 @@
                       <span class="stat-item equipment-free">
                         {{ equipmentSkillConsumesTurn(skill) ? '消耗行动' : '不耗行动' }}
                       </span>
+                      <span v-if="skill.usesItemAction" class="stat-item equipment-free">占用道具次数</span>
                     </div>
                   </Card>
                 </template>
@@ -4080,7 +4081,8 @@ function isEquipmentSkillDisabled(skill: EquipmentSkillDefinition): boolean {
   return (
     turnState.phase !== 'playerInput' ||
     getEquipmentSkillRemainingUses(skill) <= 0 ||
-    getEquipmentSkillCooldown(skill) > 0
+    getEquipmentSkillCooldown(skill) > 0 ||
+    (skill.usesItemAction === true && isItemsDisabled.value)
   );
 }
 
@@ -4460,6 +4462,16 @@ async function applyEquipmentSkillEffect(skill: EquippedEquipmentSkill): Promise
   ];
 
   switch (skill.id) {
+    case 'equipment_fallen_nun_holy_water': {
+      await applyEnemyEquipmentStatus('装备技_亵渎圣水_敏感', {
+        加成: {},
+        剩余回合: 2,
+        描述: '亵渎圣水：敏感+20%',
+        特殊效果: { 类型: '敏感', 效果值: 20, 是否为百分比: true },
+      });
+      logs.push({ message: `${enemy.value.name} 敏感+20%，持续2回合。`, type: 'debuff' });
+      break;
+    }
     case 'equipment_smiling_blade_strike': {
       const staminaSpent = player.value.stats.currentEndurance;
       const maxEndurance = Math.max(1, player.value.stats.maxEndurance);
@@ -4745,9 +4757,17 @@ async function handleEquipmentSkill(skill: EquippedEquipmentSkill) {
     return;
   }
 
+  if (skill.usesItemAction && isItemsDisabled.value) {
+    addLog(`【${skill.name}】本回合无法使用道具。`, 'system', 'info');
+    return;
+  }
+
   const consumesTurn = equipmentSkillConsumesTurn(skill);
   if (consumesTurn) {
     turnState.phase = 'processing';
+  }
+  if (skill.usesItemAction) {
+    itemUsedThisTurn.value = true;
   }
 
   try {
@@ -4773,6 +4793,9 @@ async function handleEquipmentSkill(skill: EquippedEquipmentSkill) {
   } catch (error) {
     console.error('[战斗界面] 装备技发动失败', error);
     addLog(`【${skill.name}】发动失败。`, 'system', 'critical');
+    if (skill.usesItemAction) {
+      itemUsedThisTurn.value = false;
+    }
     if (consumesTurn && !isBattleFlowLocked()) {
       turnState.phase = 'playerInput';
     }
@@ -5505,6 +5528,7 @@ function triggerCombatItemVisual(item: Item) {
 }
 
 function getEquipmentSkillVisualTone(skill: EquippedEquipmentSkill): EquipmentSkillVisualTone {
+  if (skill.equipmentId === 'fallen_nun_holy_water') return 'rose';
   if (skill.equipmentId === 'immobilizing_disc') return 'bind';
   if (skill.equipmentId === 'god_binding_chain') return 'chain';
   if (skill.equipmentId === 'white_rose_of_atonement') return 'rose';

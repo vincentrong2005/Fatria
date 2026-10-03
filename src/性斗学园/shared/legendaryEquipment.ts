@@ -9,7 +9,7 @@ export interface LegendaryEquipment {
   grade: LegendaryEquipmentGrade;
   slot: LegendaryEquipmentSlot;
   icon: string;
-  source: 'grand_wheel' | 'exorcism' | 'seven_sins' | 'sponsor';
+  source: 'grand_wheel' | 'exorcism' | 'seven_sins' | 'sponsor' | 'anniversary';
   attrFocus: string;
   description: string;
   bonuses: Partial<BonusStats>;
@@ -26,6 +26,7 @@ export interface EquipmentSkillDefinition {
   cooldown: number;
   sharedCooldownGroup?: string;
   sharedCooldown?: number;
+  usesItemAction?: boolean;
 }
 
 export interface EquippedEquipmentSkill extends EquipmentSkillDefinition {
@@ -115,6 +116,18 @@ export function isSevenSinsBossProgressComplete(progress: SevenSinsBossProgress)
 }
 
 export const LEGENDARY_EQUIPMENTS = {
+  fallenNunHolyWater: {
+    id: 'fallen_nun_holy_water',
+    name: '堕落修女的圣水瓶',
+    grade: 'SSS',
+    slot: '主装备',
+    icon: 'fas fa-flask',
+    source: 'anniversary',
+    attrFocus: '性斗力',
+    description:
+      '瓶身的圣徽仍旧洁白，瓶中的液体却散发着甜腻香气。装备技【亵渎圣水】：使目标敏感+20%，持续2回合；每场战斗可使用1次，占用本回合道具次数，不结束回合。',
+    bonuses: { 基础性斗力加成: 45, 基础忍耐力加成: 35, 魅力加成: 25, 基础性斗力成算: 8 },
+  },
   immobilizingDisc: {
     id: 'immobilizing_disc',
     name: '定身盘',
@@ -207,6 +220,17 @@ export const EXORCISM_FINAL_REWARD_EQUIPMENT = LEGENDARY_EQUIPMENTS.whiteRoseOfA
 export const SEVEN_SINS_REWARD_EQUIPMENT = LEGENDARY_EQUIPMENTS.crownOfSevenSins;
 
 export const EQUIPMENT_SKILLS: EquipmentSkillDefinition[] = [
+  {
+    id: 'equipment_fallen_nun_holy_water',
+    equipmentId: LEGENDARY_EQUIPMENTS.fallenNunHolyWater.id,
+    equipmentName: LEGENDARY_EQUIPMENTS.fallenNunHolyWater.name,
+    name: '亵渎圣水',
+    grade: 'SSS',
+    description: '目标敏感+20%，持续2回合。占用本回合道具次数，不结束回合。',
+    usesPerBattle: 1,
+    cooldown: 0,
+    usesItemAction: true,
+  },
   {
     id: 'equipment_immobilizing_disc_bind',
     equipmentId: LEGENDARY_EQUIPMENTS.immobilizingDisc.id,
