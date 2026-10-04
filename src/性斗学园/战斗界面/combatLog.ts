@@ -89,9 +89,9 @@ export function buildCombatNarrationPrompt(params: {
   const combatLogText = collectCombatLogText(params.logs, params.playerName, params.enemyName);
   const resultText = params.isVictory ? '胜利' : '战败';
   const contextText = params.isVictory ? '调教/羞辱场景' : '被调教场景';
-  const cgText = params.cgDescription ? `\n${params.cgDescription}` : '';
+  const cgText = params.cgDescription ? `，并在性斗过程后开始以下事件的描写。 ${params.cgDescription}` : '。';
   const specialtyText = params.enemySpecialty ? `（擅长：${params.enemySpecialty}）` : '';
   const openingText = `战斗开始：玩家「${params.playerName}」Lv.${params.playerLevel} vs 对手「${params.enemyName}」Lv.${params.enemyLevel}${specialtyText}`;
 
-  return `请根据以下战斗日志生成${resultText}剧情\n[战斗日志]\n${openingText}\n${combatLogText}\n共${params.totalTurns}回合。\n请根据以上性斗过程，生成一段性斗时的剧情描写（${contextText}）。${cgText}`;
+  return `请根据以下战斗日志生成${resultText}剧情\n[战斗日志]\n${openingText}\n${combatLogText}\n共${params.totalTurns}回合。\n请根据以上性斗过程，生成一段性斗时的剧情描写（${contextText}）${cgText}`;
 }
