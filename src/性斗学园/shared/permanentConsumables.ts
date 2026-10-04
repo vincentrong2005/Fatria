@@ -1,4 +1,5 @@
 import { createEmptyBonusStats, type BonusStats } from './combatMath';
+import { addPermanentNumericBonuses, migrateLegacyPermanentNumericBonuses } from './permanentNumericBonuses';
 
 export type PermanentBaseAttribute = '魅力' | '幸运' | '闪避率' | '暴击率';
 export type PermanentBonusKey = keyof BonusStats;
@@ -186,16 +187,9 @@ export function applyPermanentConsumableEffect(
   }
 
   const count = Math.max(1, Math.floor(Number(quantity) || 1));
+  migrateLegacyPermanentNumericBonuses(statData);
   if (!statData.基础属性 || typeof statData.基础属性 !== 'object') statData.基础属性 = {};
   if (!statData.核心状态 || typeof statData.核心状态 !== 'object') statData.核心状态 = {};
-  if (!statData.永久状态 || typeof statData.永久状态 !== 'object') statData.永久状态 = {};
-  if (
-    !statData.永久状态.状态列表 ||
-    typeof statData.永久状态.状态列表 !== 'object' ||
-    Array.isArray(statData.永久状态.状态列表)
-  ) {
-    statData.永久状态.状态列表 = {};
-  }
 
   const basePaths: Record<PermanentBaseAttribute, string> = {
     魅力: '_魅力',
@@ -209,30 +203,10 @@ export function applyPermanentConsumableEffect(
     const path = basePaths[key];
     const current = Number(statData.基础属性[path]) || 0;
     const next = current + numericValue * count;
-    statData.基础属性[path] =
-      key === '闪避率' || key === '暴击率' ? Math.max(0, Math.min(100, next)) : Math.max(0, next);
+    statData.基础属性[path] = Math.max(0, next);
   }
 
-  const permanentBonus = effect.永久加成 || {};
-  if (Object.values(permanentBonus).some(value => Number(value) !== 0)) {
-    const statusName = `永久消耗品_${normalizeItemName(itemName)}`;
-    const currentStatus = statData.永久状态.状态列表[statusName] || {
-      加成: createEmptyBonusStats(),
-      描述: itemData?.描述 || `${itemName}提供的永久属性加成`,
-    };
-    const currentBonus = { ...createEmptyBonusStats(), ...(currentStatus.加成 || {}) };
-    for (const [key, value] of Object.entries(permanentBonus)) {
-      const numericValue = Number(value);
-      if (!Number.isFinite(numericValue) || numericValue === 0) continue;
-      currentBonus[key as PermanentBonusKey] =
-        (Number(currentBonus[key as PermanentBonusKey]) || 0) + numericValue * count;
-    }
-    statData.永久状态.状态列表[statusName] = {
-      ...currentStatus,
-      加成: currentBonus,
-      描述: currentStatus.描述 || itemData?.描述 || `${itemName}提供的永久属性加成`,
-    };
-  }
+  addPermanentNumericBonuses(statData, effect.永久加成 || {}, count);
 
   const potential = Number(effect.潜力提升 || 0);
   if (Number.isFinite(potential) && potential !== 0) {

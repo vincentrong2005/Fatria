@@ -124,6 +124,23 @@
         },
         "_暴击率": {
           "default": 0,
+          "type": "number",
+          "minimum": 0
+        },
+        "_性斗力加成": {
+          "default": 0,
+          "type": "number"
+        },
+        "_性斗力成算": {
+          "default": 0,
+          "type": "number"
+        },
+        "_忍耐力加成": {
+          "default": 0,
+          "type": "number"
+        },
+        "_忍耐力成算": {
+          "default": 0,
           "type": "number"
         }
       }

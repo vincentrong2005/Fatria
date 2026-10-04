@@ -123,6 +123,12 @@ function getPlayerBaseAttributes(statData: any): BaseAttributes {
 
 export function getPlayerBonusSources(statData: any): BonusStats[] {
   return [
+    normalizeBonusStats({
+      基础性斗力加成: readNumber(statData, '基础属性._性斗力加成', 0),
+      基础性斗力成算: readNumber(statData, '基础属性._性斗力成算', 0),
+      基础忍耐力加成: readNumber(statData, '基础属性._忍耐力加成', 0),
+      基础忍耐力成算: readNumber(statData, '基础属性._忍耐力成算', 0),
+    }),
     getTemporaryBonus(statData),
     getPermanentBonus(statData),
     calculateEquipmentBonus(statData),

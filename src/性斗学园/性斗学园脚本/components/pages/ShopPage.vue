@@ -438,6 +438,7 @@ import {
   saveSpecialBattleUnlocked,
 } from '../../../shared/localPreferences';
 import { getCombatConsumableEffects } from '../../../shared/combatConsumables';
+import { addPermanentNumericBonuses } from '../../../shared/permanentNumericBonuses';
 import { getLatestMvuData, replaceLatestMvuData, runLatestMvuTransaction } from '../../../shared/mvuStore';
 import { getPlayerDerivedStats } from '../../../shared/statSelectors';
 import { GRAND_WHEEL_SSS_EQUIPMENT_ITEMS } from '../../../shared/legendaryEquipment';
@@ -4054,19 +4055,7 @@ function addConsumableToBackpack(statData: any, consumable: any, quantity: numbe
 
 function addPermanentBonus(statData: any, key: string, value: number) {
   if (!BONUS_KEYS.includes(key as BonusKey)) return;
-
-  const statusList = ensurePermanentStatusContainer(statData);
-  const statusName = `商店永久加成_${key}`;
-  const current = statusList[statusName] || {
-    加成: createEmptyBonusStats(),
-    描述: '商店获得的永久数值提升',
-  };
-  current.加成 = {
-    ...createEmptyBonusStats(),
-    ...normalizeBonusStats(current.加成),
-    [key]: Number(current.加成?.[key] || 0) + value,
-  };
-  statusList[statusName] = current;
+  addPermanentNumericBonuses(statData, { [key]: value });
 }
 
 function addPermanentState(statData: any, stateName: string, bonus: Record<string, any> = {}, description = '') {
@@ -4497,7 +4486,6 @@ async function purchaseItem() {
             if (item.effect.luckyEnvelope) {
               if (!mvuData.stat_data.核心状态) mvuData.stat_data.核心状态 = {};
               if (!mvuData.stat_data.基础属性) mvuData.stat_data.基础属性 = {};
-              ensurePermanentStatusContainer(mvuData.stat_data);
               const results: string[] = [];
               for (let i = 0; i < quantity; i++) {
                 const roll = Math.random();
@@ -4567,8 +4555,7 @@ async function purchaseItem() {
             }
 
             if (item.effect.permanentBonus) {
-              // 永久成算类提升：写入永久状态条目，由 selector 实时汇总。
-              ensurePermanentStatusContainer(mvuData.stat_data);
+              // 永久数值提升直接累加到基础属性。
               for (const [key, value] of Object.entries(item.effect.permanentBonus)) {
                 addPermanentBonus(mvuData.stat_data, key, (value as number) * quantity);
               }

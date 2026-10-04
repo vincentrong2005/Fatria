@@ -194,7 +194,7 @@ const ConsumableItemSchema = BaseItemSchema.extend({
   加成属性: BonusSchema.optional(),
   /** 使用后写入基础属性，例如 { 魅力: 2, 幸运: 1 }。 */
   永久属性: z.record(z.string(), z.coerce.number()).optional(),
-  /** 使用后合并到永久状态.状态列表的加成。 */
+  /** 使用后直接累加到基础属性的加成。 */
   永久加成: BonusSchema.optional(),
   耐力增加: z.coerce.number().optional(),
   快感降低: z.coerce.number().optional(),
@@ -254,10 +254,11 @@ export const Schema = z.object({
       _魅力: z.coerce.number().min(0).prefault(10),
       _幸运: z.coerce.number().min(0).prefault(10),
       _闪避率: z.coerce.number().min(0).prefault(0),
-      _暴击率: z.coerce
-        .number()
-        .transform(n => clamp(n, 0, 100))
-        .prefault(0),
+      _暴击率: z.coerce.number().min(0).prefault(0),
+      _性斗力加成: z.coerce.number().prefault(0),
+      _性斗力成算: z.coerce.number().prefault(0),
+      _忍耐力加成: z.coerce.number().prefault(0),
+      _忍耐力成算: z.coerce.number().prefault(0),
     })
     .prefault({}),
 

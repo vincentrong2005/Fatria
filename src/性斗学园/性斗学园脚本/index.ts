@@ -18,6 +18,7 @@ import {
 } from '../shared/cgUnlockStore';
 import { unlockAvatarVariationsFromMvuData } from '../shared/avatarVariationStore';
 import { getLatestMvuData, replaceLatestMvuData, runLatestMvuTransaction, waitForMvu } from '../shared/mvuStore';
+import { migrateLegacyPermanentNumericBonuses } from '../shared/permanentNumericBonuses';
 import { syncCurrentChatUserInfoToPersona } from '../shared/userWorldbookSync';
 import { syncXiaoyeyueLightDarkStatusBonus } from '../shared/xiaoyeyueMagicGirl';
 import { shouldTriggerOrgasm } from '../开局/utils/combat-calculator';
@@ -665,6 +666,19 @@ async function enforcePotentialCapOnStartup() {
 // 脚本启动即执行一次校验（防止历史存档/手改导致潜力越界）
 await enforcePotentialCapOnStartup();
 
+async function migrateLatestPermanentNumericBonuses(reason: string) {
+  await runLatestMvuTransaction(`永久数值迁移：${reason}`, async () => {
+    const mvuData = await getLatestMvuData();
+    if (!mvuData?.stat_data) return;
+    const migrated = migrateLegacyPermanentNumericBonuses(mvuData.stat_data);
+    if (migrated.length === 0) return;
+    await replaceLatestMvuData(mvuData);
+    console.info(`[性斗学园脚本] 已迁移 ${migrated.length} 条旧永久数值记录（${reason}）`);
+  });
+}
+
+await migrateLatestPermanentNumericBonuses('脚本启动');
+
 // 防止重复更新的标志
 let isUpdating = false;
 let isNormalizingCharacterNames = false;
@@ -1077,6 +1091,10 @@ function registerMvuEventListeners() {
     eventOn(Mvu.events.VARIABLE_UPDATE_ENDED, async (variables, variables_before_update) => {
       console.info('[性斗学园脚本] 检测到 MVU 变量更新事件');
 
+      if (migrateLegacyPermanentNumericBonuses(clonePlainData(variables)?.stat_data || {}).length > 0) {
+        setTimeout(() => void migrateLatestPermanentNumericBonuses('MVU变量更新'), 50);
+      }
+
       const normalizePreview = normalizeCharacterNamesInMvuData(variables);
       if (normalizePreview.changed) {
         console.info(`[性斗学园脚本] 检测到角色名需要规范化：${normalizePreview.logs.join('；')}`);
@@ -1143,6 +1161,7 @@ function registerMvuEventListeners() {
     eventOn(Mvu.events.VARIABLE_INITIALIZED, async () => {
       scheduleCurrentChatUserInfoSync('变量初始化', [200, 1000, 2500, 5000]);
       await enforcePotentialCapOnStartup();
+      await migrateLatestPermanentNumericBonuses('变量初始化');
       await normalizeLatestCharacterNames('变量初始化');
       await normalizeLatestBackpackEquipments('变量初始化');
       await updateDependentVariables();
@@ -1276,6 +1295,7 @@ function scheduleCurrentChatUserInfoSync(reason: string, delays: number[] = [300
 if (isPrimaryScriptInstance && typeof tavern_events !== 'undefined' && tavern_events.CHAT_CHANGED) {
   eventOn(tavern_events.CHAT_CHANGED, () => {
     scheduleCurrentChatUserInfoSync('聊天切换', [300, 1000, 2500, 5000, 8000]);
+    setTimeout(() => void migrateLatestPermanentNumericBonuses('聊天切换'), 300);
   });
   console.info('[性斗学园脚本] 已注册聊天切换用户人设同步监听器');
 } else if (isPrimaryScriptInstance) {
