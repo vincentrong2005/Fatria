@@ -86,7 +86,10 @@
     "axios": "1.18.1",
     "compare-versions": "^6.1.1",
     "dedent": "^1.7.2",
+<<<<<<< HEAD
     "fflate": "^0.8.3",
+=======
+>>>>>>> fbd0c2c5f019bec7ca3a145029527629c529b4b3
     "gsap": "^3.15.1",
     "jquery": "^4.0.0",
     "jqueryui": "^1.11.1",
