@@ -2039,9 +2039,12 @@ packages:
       picomatch:
         optional: true
 
+<<<<<<< HEAD
   fflate@0.8.3:
     resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
+=======
+>>>>>>> f8b20765c5ce38a1e065c2a84b9882d8fac75f97
   file-entry-cache@11.1.5:
     resolution: {integrity: sha512-+PFTHITI08JIGhnNpGNI8T8inUpgZfk3GNEqfT9R2zZV2iFXg3CvqzSl/uEhs7TSGujYRELEANyDvS8Fj7+S7Q==}
 
@@ -6177,8 +6180,11 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.7
 
+<<<<<<< HEAD
   fflate@0.8.3: {}
 
+=======
+>>>>>>> f8b20765c5ce38a1e065c2a84b9882d8fac75f97
   file-entry-cache@11.1.5:
     dependencies:
       flat-cache: 6.1.23
@@ -6915,10 +6921,13 @@ snapshots:
   lower-case@2.0.2:
     dependencies:
       tslib: 2.9.1
+<<<<<<< HEAD
 
   lucide-react@0.563.0(react@19.3.1):
     dependencies:
       react: 19.3.1
+=======
+>>>>>>> f8b20765c5ce38a1e065c2a84b9882d8fac75f97
 
   magic-string-ast@1.0.3:
     dependencies:
